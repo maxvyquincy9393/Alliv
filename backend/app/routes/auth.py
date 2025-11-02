@@ -193,13 +193,13 @@ async def register(request: Request, data: RegisterRequest):
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, credentials: LoginRequest):
     """
-    Enhanced login with security features
+    Enhanced login with security features - FIXED VERSION
     """
     email = credentials.email.lower().strip()
     ip_address = get_remote_address(request)
     
     # Generic error message for security
-    generic_error = "Invalid credentials"
+    generic_error = "Invalid email or password"
     
     # Check rate limit
     allowed, message = check_rate_limit(email, ip_address)
@@ -210,9 +210,10 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         )
     
     try:
-        # Find user (case-insensitive)
+        # Find user (case-insensitive) - ONLY email-registered users
         user = await db.users().find_one({
             "email": {"$regex": f"^{email}$", "$options": "i"},
+            "provider": "email",  # CRITICAL: Only allow email provider login
             "active": True
         })
         
@@ -223,15 +224,17 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
                 detail=generic_error
             )
         
-        # Check if password exists (for OAuth users)
+        # Check if password exists
         if not user.get("passwordHash"):
+            record_failed_attempt(email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Please login with your social account"
             )
         
-        # Verify password
-        if not verify_password_hash(credentials.password, user["passwordHash"]):
+        # Verify password - CRITICAL FIX
+        password_valid = verify_password_hash(credentials.password, user["passwordHash"])
+        if not password_valid:
             record_failed_attempt(email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -292,6 +295,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Login error: {str(e)}")  # Debug log
         record_failed_attempt(email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
