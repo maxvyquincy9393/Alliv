@@ -29,52 +29,58 @@ export const Events = () => {
         id: '1',
         title: 'Sunday Photo Walk: Old Town',
         description: 'Join us for a relaxed photo walk through the historic old town. All skill levels welcome!',
-        organizer: {
-          id: 'u1',
-          name: 'Lisa Wang',
-          avatar: 'https://i.pravatar.cc/150?img=9',
-        },
+        organizerId: 'u1',
+        organizerName: 'Lisa Wang',
+        organizerAvatar: 'https://i.pravatar.cc/150?img=9',
         category: 'photowalk',
         startsAt: '2025-11-10T09:00:00',
         venueCity: 'Jakarta',
+        tags: ['photography', 'outdoor'],
+        field: 'photography',
         maxAttendees: 15,
         attendees: [],
         rsvps: [],
         isOnline: false,
+        status: 'upcoming',
+        createdAt: new Date().toISOString(),
       },
       {
         id: '2',
         title: 'Jazz Jam Session',
         description: 'Bring your instrument and join our weekly jam session. Improvise, collaborate, and have fun!',
-        organizer: {
-          id: 'u2',
-          name: 'David Park',
-          avatar: 'https://i.pravatar.cc/150?img=11',
-        },
+        organizerId: 'u2',
+        organizerName: 'David Park',
+        organizerAvatar: 'https://i.pravatar.cc/150?img=11',
         category: 'jamsession',
         startsAt: '2025-11-08T19:00:00',
         venueCity: 'Tokyo',
+        tags: ['music', 'jazz'],
+        field: 'music',
         maxAttendees: 20,
         attendees: [],
         rsvps: [],
         isOnline: false,
+        status: 'upcoming',
+        createdAt: new Date().toISOString(),
       },
       {
         id: '3',
         title: '48-Hour Hackathon: AI for Good',
         description: 'Build AI solutions for social impact. Teams will be formed on day 1. Prizes for top 3 projects!',
-        organizer: {
-          id: 'u3',
-          name: 'Emma Chen',
-          avatar: 'https://i.pravatar.cc/150?img=6',
-        },
-        category: 'hacknight',
+        organizerId: 'u3',
+        organizerName: 'Emma Chen',
+        organizerAvatar: 'https://i.pravatar.cc/150?img=6',
+        category: 'hackathon',
         startsAt: '2025-11-15T18:00:00',
         venueCity: 'Online',
+        tags: ['tech', 'ai', 'coding'],
+        field: 'technology',
         maxAttendees: 50,
         attendees: [],
         rsvps: [],
         isOnline: true,
+        status: 'upcoming',
+        createdAt: new Date().toISOString(),
       },
     ];
     setEvents(mockEvents);
@@ -90,20 +96,32 @@ export const Events = () => {
     return e.category === filter;
   });
 
-  const categoryIcons: Record<EventCategory, string> = {
+  const categoryIcons: Partial<Record<EventCategory, string>> = {
     photowalk: '📷',
+    'photography-walk': '📷',
     jamsession: '🎵',
+    'jam-session': '🎵',
     hacknight: '💻',
+    hackathon: '💻',
     meetup: '🤝',
     workshop: '🎓',
+    'design-sprint': '🎨',
+    networking: '🌐',
+    collaboration: '🤝',
   };
 
-  const categoryLabels: Record<EventCategory, string> = {
+  const categoryLabels: Partial<Record<EventCategory, string>> = {
     photowalk: 'Photo Walk',
+    'photography-walk': 'Photo Walk',
     jamsession: 'Jam Session',
+    'jam-session': 'Jam Session',
     hacknight: 'Hack Night',
+    hackathon: 'Hackathon',
     meetup: 'Meetup',
     workshop: 'Workshop',
+    'design-sprint': 'Design Sprint',
+    networking: 'Networking',
+    collaboration: 'Collaboration',
   };
 
   return (
@@ -165,9 +183,11 @@ export const Events = () => {
               >
                 {/* Category Badge */}
                 <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 glass rounded-full text-xs font-medium text-white/70">
-                    {categoryIcons[event.category]} {categoryLabels[event.category]}
-                  </span>
+                  {event.category && (
+                    <span className="px-3 py-1 glass rounded-full text-xs font-medium text-white/70">
+                      {categoryIcons[event.category] || '📌'} {categoryLabels[event.category] || event.category}
+                    </span>
+                  )}
                   {event.isOnline && (
                     <span className="px-3 py-1 glass rounded-full text-xs text-accent-blue">
                       🌐 Online
@@ -180,11 +200,11 @@ export const Events = () => {
                   <h3 className="text-xl font-bold text-white mb-2">{event.title}</h3>
                   <div className="flex items-center gap-2">
                     <img
-                      src={event.organizer.avatar}
-                      alt={event.organizer.name}
+                      src={event.organizerAvatar}
+                      alt={event.organizerName}
                       className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10"
                     />
-                    <span className="text-xs text-white/50">by {event.organizer.name}</span>
+                    <span className="text-xs text-white/50">by {event.organizerName}</span>
                   </div>
                 </div>
 
@@ -211,7 +231,7 @@ export const Events = () => {
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-white/40">👥</span>
                     <span className="text-white/70">
-                      {event.attendees.length}/{event.maxAttendees} attending
+                      {event.attendees.length}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attending
                     </span>
                   </div>
                 </div>
@@ -221,9 +241,9 @@ export const Events = () => {
                   variant="primary"
                   fullWidth
                   onClick={() => handleRSVP(event.id)}
-                  disabled={event.attendees.length >= event.maxAttendees}
+                  disabled={event.maxAttendees ? event.attendees.length >= event.maxAttendees : false}
                 >
-                  {event.attendees.length >= event.maxAttendees ? 'Event Full' : 'RSVP'}
+                  {event.maxAttendees && event.attendees.length >= event.maxAttendees ? 'Event Full' : 'RSVP'}
                 </GlassButton>
               </motion.div>
             ))}

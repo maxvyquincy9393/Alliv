@@ -24,7 +24,7 @@ export const Navbar = () => {
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
-      className={`sticky top-0 z-50 transition-all duration-300 ${
+      className={`hidden md:block sticky top-0 z-50 transition-all duration-300 ${
         scrolled
           ? 'glass backdrop-blur-xl shadow-glass'
           : 'bg-transparent'

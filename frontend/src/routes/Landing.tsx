@@ -1,128 +1,153 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { GlassButton } from '../components/GlassButton';
-import { fadeInUp, stagger, pageTransition } from '../lib/motion';
 
 export const Landing = () => {
   return (
-    <motion.div
-      variants={pageTransition}
-      initial="hidden"
-      animate="show"
-      exit="exit"
-      className="min-h-screen flex flex-col items-center justify-center px-4 relative"
-    >
-      <motion.div 
-        variants={stagger(0.1)}
-        initial="hidden"
-        animate="show"
-        className="max-w-4xl mx-auto text-center flex-1 flex flex-col justify-center"
-      >
-        {/* Logo with pulse effect */}
+    <div className="min-h-screen bg-white text-black overflow-x-hidden">
+      {/* Hero Section - Apple Style */}
+      <section className="min-h-screen flex flex-col items-center justify-center px-4 py-20">
         <motion.div
-          variants={fadeInUp}
-          className="mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="text-center max-w-4xl mx-auto"
         >
+          {/* Logo */}
           <motion.h1
-            animate={{ 
-              scale: [1, 1.05, 1],
-            }}
-            transition={{ 
-              duration: 1,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="text-[4rem] md:text-[6rem] font-bold text-white mb-4"
-            style={{
-              textShadow: '0 0 30px rgba(110, 158, 255, 0.8), 0 0 60px rgba(110, 158, 255, 0.4), 0 0 90px rgba(110, 158, 255, 0.2)',
-            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold mb-6 tracking-tight"
           >
             Alliv
           </motion.h1>
+
+          {/* Tagline */}
           <motion.p
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.8 }}
-            transition={{ delay: 0.5 }}
-            className="text-lg text-white/80 mb-2"
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-xl sm:text-2xl md:text-3xl text-gray-600 mb-12 px-4"
           >
-            AI-powered collaboration. Temuin teman buat project abrengmu.
+            Connect with creative minds.<br className="sm:hidden" /> Build something amazing.
           </motion.p>
+
+          {/* CTA Buttons */}
           <motion.div
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="h-0.5 w-48 mx-auto bg-gradient-to-r from-transparent via-accent-blue to-transparent shadow-glow-blue"
-          />
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center px-4"
+          >
+            <Link to="/register" className="w-full sm:w-auto">
+              <button className="w-full sm:w-auto px-8 py-3 bg-black text-white rounded-full text-lg font-medium hover:bg-gray-800 transition-colors">
+                Get Started
+              </button>
+            </Link>
+            <Link to="/login" className="w-full sm:w-auto">
+              <button className="w-full sm:w-auto px-8 py-3 border-2 border-black text-black rounded-full text-lg font-medium hover:bg-gray-50 transition-colors">
+                Sign In
+              </button>
+            </Link>
+          </motion.div>
         </motion.div>
+      </section>
 
-        {/* Hero Text */}
-        <motion.div variants={fadeInUp}>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 leading-tight">
-            Find. Connect. Build Together.
-          </h2>
-          <p className="text-base text-white/60 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Platform kolaborasi profesional. Match dengan developers, designers,
-            photographers, musicians, dan visionaries yang siap berkarya.
-          </p>
-        </motion.div>
+      {/* Features Section */}
+      <section className="py-20 px-4 bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-12"
+          >
+            <FeatureCard
+              title="Smart Matching"
+              description="AI-powered compatibility that connects you with the right collaborators based on skills, interests, and goals."
+            />
+            <FeatureCard
+              title="Discover Nearby"
+              description="Find talented professionals online or in your area with intelligent location-based search."
+            />
+            <FeatureCard
+              title="Verified & Secure"
+              description="Trust scores and verified profiles ensure you're connecting with real, professional creatives."
+            />
+          </motion.div>
+        </div>
+      </section>
 
-        {/* CTA Buttons */}
-        <motion.div
-          variants={fadeInUp}
-          className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-md mx-auto"
-        >
-          <Link to="/register" className="w-full sm:w-auto">
-            <GlassButton variant="primary" fullWidth>
-              Create Account
-            </GlassButton>
-          </Link>
+      {/* Learn Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-semibold mb-6">
+              Learn & Grow
+            </h2>
+            <p className="text-xl text-gray-600 mb-8 px-4">
+              Discover resources, tutorials, and best practices to maximize your collaboration experience. 
+              Connect with mentors, join workshops, and access exclusive content designed to help you succeed.
+            </p>
+            <Link to="/register">
+              <button className="px-8 py-3 bg-black text-white rounded-full text-lg font-medium hover:bg-gray-800 transition-colors">
+                Start Learning
+              </button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
 
-          <Link to="/login" className="w-full sm:w-auto">
-            <GlassButton variant="secondary" fullWidth>
-              Log In
-            </GlassButton>
-          </Link>
-        </motion.div>
-
-        {/* Features */}
-        <motion.div
-          variants={stagger(0.15)}
-          initial="hidden"
-          animate="show"
-          className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8"
-        >
-          <FeatureCard
-            title="Smart Matching"
-            description="AI-powered compatibility across skills, interests, and goals"
-          />
-          <FeatureCard
-            title="Dual Discovery"
-            description="Find collaborators online or nearby with location-based search"
-          />
-          <FeatureCard
-            title="Safe & Real"
-            description="Verified profiles, trust scores, and professional community"
-          />
-        </motion.div>
-      </motion.div>
+      {/* Safety Section */}
+      <section className="py-20 px-4 bg-gray-50">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-semibold mb-6">
+              Your Safety Matters
+            </h2>
+            <p className="text-xl text-gray-600 mb-8 px-4">
+              We prioritize your security and privacy. All profiles are verified, communications are monitored 
+              for safety, and our trust score system helps you make informed decisions about who to collaborate with.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto mt-12">
+              <div className="p-6 bg-white rounded-2xl">
+                <h3 className="text-lg font-semibold mb-2">Verified Profiles</h3>
+                <p className="text-gray-600">Every user goes through identity verification</p>
+              </div>
+              <div className="p-6 bg-white rounded-2xl">
+                <h3 className="text-lg font-semibold mb-2">Trust Scores</h3>
+                <p className="text-gray-600">Transparent ratings from real collaborations</p>
+              </div>
+              <div className="p-6 bg-white rounded-2xl">
+                <h3 className="text-lg font-semibold mb-2">Secure Messaging</h3>
+                <p className="text-gray-600">End-to-end encrypted communications</p>
+              </div>
+              <div className="p-6 bg-white rounded-2xl">
+                <h3 className="text-lg font-semibold mb-2">24/7 Support</h3>
+                <p className="text-gray-600">Our team is always here to help</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.6 }}
-        transition={{ delay: 1 }}
-        className="absolute bottom-6 text-center"
-      >
-        <a 
-          href="https://x.ai" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-white/40 text-sm hover:text-white/60 transition-colors"
-        >
-          Powered by xAI
-        </a>
-      </motion.footer>
-    </motion.div>
+      <footer className="py-12 px-4 border-t border-gray-200">
+        <div className="max-w-6xl mx-auto text-center">
+          <p className="text-gray-500 text-sm">
+            © 2025 Alliv. All rights reserved.
+          </p>
+        </div>
+      </footer>
+    </div>
   );
 };
 
@@ -134,16 +159,13 @@ interface FeatureCardProps {
 const FeatureCard = ({ title, description }: FeatureCardProps) => {
   return (
     <motion.div
-      variants={fadeInUp}
-      whileHover={{ 
-        y: -8,
-        scale: 1.02,
-        transition: { type: 'spring', stiffness: 300 }
-      }}
-      className="p-6 glass rounded-2xl shadow-glass hover:shadow-glow-blue transition-shadow"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="text-center"
     >
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-      <p className="text-white/40 text-sm leading-relaxed">{description}</p>
+      <h3 className="text-2xl font-semibold mb-4">{title}</h3>
+      <p className="text-gray-600 leading-relaxed">{description}</p>
     </motion.div>
   );
 };

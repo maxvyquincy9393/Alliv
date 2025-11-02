@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .db import init_db, close_db
 from .routes import discover, match, chat
-from .routes import auth_enhanced as auth
+from .routes import auth
 from .routes import profile
 from .routes import discovery
 from .routes import swipe

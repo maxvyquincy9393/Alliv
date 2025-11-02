@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { BackgroundFX } from './components/BackgroundFX';
-import { Landing } from './routes/Landing';
+import { LandingMinimal } from './routes/LandingMinimal';
 import { Login } from './routes/Login';
 import { Register } from './routes/Register';
 import { Home } from './routes/Home';
@@ -19,7 +19,7 @@ function App() {
       <BackgroundFX />
       <AnimatePresence mode="wait">
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<LandingMinimal />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register/*" element={<Register />} />
           <Route path="/home" element={<Home />} />
