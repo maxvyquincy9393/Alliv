@@ -1,11 +1,14 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { LandingNavbar } from '../components/LandingNavbar';
 
 export const Landing = () => {
   return (
     <div className="min-h-screen bg-white text-black overflow-x-hidden">
+      <LandingNavbar />
+      
       {/* Hero Section - Apple Style */}
-      <section className="min-h-screen flex flex-col items-center justify-center px-4 py-20">
+      <section className="min-h-screen flex flex-col items-center justify-center px-4 py-20 pt-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -79,7 +82,7 @@ export const Landing = () => {
       </section>
 
       {/* Learn Section */}
-      <section className="py-20 px-4">
+      <section id="learn" className="py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0 }}
@@ -103,7 +106,7 @@ export const Landing = () => {
       </section>
 
       {/* Safety Section */}
-      <section className="py-20 px-4 bg-gray-50">
+      <section id="safety" className="py-20 px-4 bg-gray-50">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0 }}
