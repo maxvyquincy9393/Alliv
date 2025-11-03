@@ -1,23 +1,36 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { ChatBubble } from '../components/ChatBubble';
 import { TypingIndicator } from '../components/TypingIndicator';
 import { AIIcebreakers } from '../components/AIIcebreakers';
 import { FlirtDetector } from '../components/FlirtDetector';
 import { useAuth } from '../hooks/useAuth';
-import { useChat } from '../hooks/useChat';
+import { useSocket } from '../hooks/useSocket'; // ✅ WebSocket instead of REST
 import { fadeInUp, stagger } from '../lib/motion';
 
 export const Chat = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const { messages, sendMessage, typing: isTyping } = useChat('mock-match-id');
+  const { matchId } = useParams<{ matchId: string }>(); // Get match ID from URL
+  
+  // ✅ Use WebSocket for real-time chat
+  const { 
+    messages, 
+    typing, 
+    online, 
+    connected, 
+    sendMessage, 
+    sendTyping, 
+    error 
+  } = useSocket(matchId || null);
+  
   const [messageInput, setMessageInput] = useState('');
   const [showIcebreakers, setShowIcebreakers] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -29,11 +42,35 @@ export const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ✅ Handle typing indicator with debounce
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessageInput(e.target.value);
+    
+    // Send typing=true
+    sendTyping(true);
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set timeout to stop typing after 2 seconds of inactivity
+    typingTimeoutRef.current = window.setTimeout(() => {
+      sendTyping(false);
+    }, 2000);
+  };
+
   const handleSend = () => {
     if (messageInput.trim()) {
-      sendMessage(messageInput);
+      sendMessage(messageInput); // ✅ WebSocket send
       setMessageInput('');
       setShowIcebreakers(false);
+      
+      // Stop typing indicator
+      sendTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     }
   };
 
@@ -86,13 +123,29 @@ export const Chat = () => {
                     alt="Chat partner"
                     className="w-12 h-12 rounded-full object-cover ring-2 ring-accent-blue/30"
                   />
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full ring-2 ring-background" />
+                  {/* ✅ Real-time online status */}
+                  {online && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full ring-2 ring-background" />
+                  )}
+                  {!online && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-gray-400 rounded-full ring-2 ring-background" />
+                  )}
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-white">Alex Chen</h2>
-                  <p className="text-xs text-white/50">Active now</p>
+                  {/* ✅ Show connection status */}
+                  <p className="text-xs text-white/50">
+                    {connected ? (online ? 'Active now' : 'Offline') : 'Connecting...'}
+                  </p>
                 </div>
               </div>
+              
+              {/* ✅ Show connection error */}
+              {error && (
+                <div className="text-xs text-red-400">
+                  {error}
+                </div>
+              )}
               
               <button 
                 onClick={() => navigate('/profile/1')} 
@@ -139,12 +192,20 @@ export const Chat = () => {
               <>
                 {messages.map((msg) => (
                   <ChatBubble
-                    key={msg.id}
-                    message={msg}
-                    isOwn={msg.senderId === 'current-user'}
+                    key={msg._id}
+                    message={{
+                      id: msg._id,
+                      content: msg.content,
+                      senderId: msg.senderId,
+                      receiverId: matchId || '',
+                      timestamp: new Date(msg.createdAt),
+                      read: !!msg.readAt
+                    }}
+                    isOwn={msg.senderId === user?.id}
                   />
                 ))}
-                {isTyping && <TypingIndicator />}
+                {/* ✅ Real-time typing indicator */}
+                {typing && <TypingIndicator />}
                 <div ref={messagesEndRef} />
               </>
             )}
@@ -175,7 +236,7 @@ export const Chat = () => {
               <div className="flex-1 relative">
                 <textarea
                   value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyPress={handleKeyPress}
                   placeholder="Type a message..."
                   rows={1}

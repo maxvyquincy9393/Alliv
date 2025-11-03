@@ -3,6 +3,8 @@ import { AnimatePresence } from 'framer-motion';
 import { Landing } from './routes/Landing';
 import { Login } from './routes/Login';
 import { Register } from './routes/Register';
+import { VerifyEmail } from './routes/VerifyEmail';
+import { SetupProfile } from './routes/SetupProfile';
 import { Home } from './routes/Home';
 import { Discover } from './routes/Discover';
 import { Chat } from './routes/Chat';
@@ -20,6 +22,8 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register/*" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/setup-profile" element={<SetupProfile />} />
           <Route path="/home" element={<Home />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/chat" element={<Chat />} />

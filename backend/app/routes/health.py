@@ -3,12 +3,10 @@ Comprehensive health check endpoint
 """
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from datetime import datetime, timezone
 import psutil
 import time
 from typing import Dict, Any
-from app.db import get_database
-
 
 router = APIRouter()
 
@@ -19,7 +17,8 @@ STARTUP_TIME = time.time()
 async def check_database_health() -> Dict[str, Any]:
     """Check MongoDB connection health"""
     try:
-        db = await get_database()
+        from app.db import get_db
+        db = await get_db()
         # Ping database
         await db.command('ping')
         
@@ -121,7 +120,7 @@ async def health_check():
             status_code=status_code,
             content={
                 "status": "healthy" if is_healthy else "degraded",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
                 "checks": {
                     "database": db_health,
                     "redis": redis_health,
@@ -136,7 +135,7 @@ async def health_check():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "status": "unhealthy",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
                 "error": str(e)
             }
         )

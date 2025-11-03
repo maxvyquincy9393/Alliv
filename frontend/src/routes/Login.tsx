@@ -17,10 +17,30 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/home');
-    } catch (err) {
-      setError('Invalid credentials. Please try again.');
+      const userData = await login(email, password);
+      
+      // CRITICAL FIX: Check profileComplete before navigating
+      if (userData && 'profileComplete' in userData) {
+        if (userData.profileComplete === false) {
+          // Profile not complete - redirect to setup
+          navigate('/setup-profile');
+        } else {
+          // Profile complete - go to home
+          navigate('/home');
+        }
+      } else {
+        // Fallback if no profileComplete field
+        navigate('/home');
+      }
+    } catch (err: any) {
+      // Better error messages from backend
+      if (err?.message?.includes('verify your email')) {
+        setError('Please verify your email before logging in.');
+      } else if (err?.message?.includes('deactivated')) {
+        setError('Your account has been deactivated. Contact support.');
+      } else {
+        setError('Invalid email or password. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

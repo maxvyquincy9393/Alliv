@@ -3,7 +3,7 @@ Enhanced Authentication Routes with Security Improvements
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Response, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict
 import secrets
 import hashlib
@@ -13,10 +13,13 @@ import asyncio
 from collections import defaultdict
 import time
 import urllib.parse
+import httpx
 
 from ..config import settings
 from .. import db
-from ..auth import create_access_token, get_current_user
+from ..auth import get_current_user, oauth2_scheme, create_access_token, create_refresh_token, verify_access_token, verify_refresh_token
+from ..oauth_providers import get_oauth_user_info
+from ..email_utils import send_verification_email  # NEW: Email sending
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -33,9 +36,10 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     name: str = Field(..., min_length=2, max_length=50)
-    birthdate: str
+    birthdate: Optional[str] = None  # Optional - can be set in profile setup
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def validate_password(cls, v):
         if not any(char.isdigit() for char in v):
             raise ValueError('Password must contain at least one digit')
@@ -113,6 +117,11 @@ def generate_refresh_token() -> str:
 
 # ===== ROUTES =====
 
+@router.options("/register")
+async def register_options():
+    """Handle CORS preflight for register endpoint"""
+    return JSONResponse(content={"status": "ok"}, status_code=200)
+
 @router.post("/register", response_model=dict)
 @limiter.limit("5/minute")
 async def register(request: Request, data: RegisterRequest):
@@ -120,6 +129,11 @@ async def register(request: Request, data: RegisterRequest):
     Register new user with enhanced validation
     """
     try:
+        # DEBUG: Log incoming data
+        import logging
+        logger = logging.getLogger("alliv")
+        logger.info(f"Registration attempt - Email: {data.email}, Name: {data.name}, Has password: {bool(data.password)}, Birthdate: {data.birthdate}")
+        
         # Normalize email
         email = data.email.lower().strip()
         
@@ -132,15 +146,20 @@ async def register(request: Request, data: RegisterRequest):
             )
         
         # Create user document
+        verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])  # 6-digit code
+        
         user_doc = {
             "email": email,
             "passwordHash": hash_password(data.password),
             "name": data.name.strip(),
-            "birthdate": data.birthdate,
+            "birthdate": data.birthdate if data.birthdate else None,  # Optional
             "provider": "email",
             "providerId": None,
             "emailVerified": False,
             "emailVerifiedAt": None,
+            "emailVerificationToken": secrets.token_urlsafe(32),  # Generate verification token
+            "emailVerificationCode": verification_code,  # 6-digit code
+            "emailVerificationExpires": datetime.utcnow() + timedelta(hours=24),  # 24h expiry
             "roles": ["user"],
             "active": True,
             "lastLogin": None,
@@ -152,10 +171,11 @@ async def register(request: Request, data: RegisterRequest):
         result = await db.users().insert_one(user_doc)
         user_id = str(result.inserted_id)
         
-        # Create empty profile
+        # Create empty profile (needs completion)
         profile_doc = {
             "userId": user_id,
             "name": data.name.strip(),
+            "bio": "",  # Empty - needs completion
             "photos": [],
             "skills": [],
             "interests": [],
@@ -163,6 +183,7 @@ async def register(request: Request, data: RegisterRequest):
             "category": "",
             "location": {},
             "visibility": "public",
+            "profileComplete": False,  # IMPORTANT: Requires setup
             "trustScore": 50,  # Start at 50/100
             "completionScore": 10,  # 10% for basic registration
             "createdAt": datetime.utcnow(),
@@ -171,13 +192,31 @@ async def register(request: Request, data: RegisterRequest):
         
         await db.profiles().insert_one(profile_doc)
         
-        # TODO: Send verification email
+        # Generate verification link
+        verification_token = user_doc["emailVerificationToken"]
+        verification_code = user_doc["emailVerificationCode"]
+        verification_link = f"{settings.OAUTH_REDIRECT_BASE.replace('/auth/oauth', '')}/verify-email?token={verification_token}"
         
+        # Send verification email
+        email_sent = await send_verification_email(
+            to_email=email,
+            verification_link=verification_link,
+            user_name=data.name.strip(),
+            verification_code=verification_code
+        )
+        
+        if not email_sent:
+            logger.warning(f"Failed to send verification email to {email}")
+        
+        # Return verification instructions
         return {
-            "message": "User created successfully. Please verify your email.",
-            "userId": user_id,
+            "message": "Registration successful! Please check your email to verify your account.",
+            "emailSent": email_sent,
             "email": email,
-            "verified": False
+            # Development only - helps with testing
+            "verificationToken": verification_token if settings.DEBUG else None,
+            "verificationLink": verification_link if settings.DEBUG else None,
+            "requiresEmailVerification": True
         }
         
     except HTTPException:
@@ -189,16 +228,204 @@ async def register(request: Request, data: RegisterRequest):
         )
 
 
+@router.get("/verify-email")
+async def verify_email(token: str):
+    """
+    Verify email address with token from email link
+    """
+    try:
+        # Find user with this verification token
+        user = await db.users().find_one({
+            "emailVerificationToken": token,
+            "emailVerificationExpires": {"$gt": datetime.utcnow()}
+        })
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification token"
+            )
+        
+        # Mark email as verified
+        await db.users().update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "emailVerified": True,
+                    "emailVerifiedAt": datetime.utcnow(),
+                },
+                "$unset": {
+                    "emailVerificationToken": "",
+                    "emailVerificationExpires": ""
+                }
+            }
+        )
+        
+        # Generate tokens for auto-login after verification
+        user_id = str(user["_id"])
+        access_token = create_access_token({
+            "sub": user_id,
+            "email": user["email"],
+            "verified": True
+        })
+        
+        refresh_token = create_refresh_token({"sub": user_id})
+        
+        # Store refresh token
+        await db.users().update_one(
+            {"_id": user["_id"]},
+            {"$push": {"refreshTokens": {
+                "token": refresh_token,
+                "createdAt": datetime.utcnow()
+            }}}
+        )
+        
+        # Return success with tokens
+        return {
+            "message": "Email verified successfully! You can now complete your profile.",
+            "emailVerified": True,
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "user": {
+                "id": user_id,
+                "email": user["email"],
+                "name": user["name"],
+                "emailVerified": True,
+                "profileComplete": False  # Still needs profile setup
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email verification failed. Please try again."
+        )
+
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+@router.post("/verify-email-code")
+async def verify_email_code(data: VerifyCodeRequest):
+    """
+    Verify email address with 6-digit code from email
+    """
+    try:
+        email = data.email.lower().strip()
+        code = data.code.strip()
+        
+        print(f"🔍 DEBUG - Verifying email: {email}")
+        print(f"🔍 DEBUG - Code received: {code}")
+        
+        # First, find user by email
+        user_check = await db.users().find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"}
+        })
+        
+        if user_check:
+            print(f"✅ DEBUG - User found: {user_check.get('email')}")
+            print(f"🔍 DEBUG - Stored code: {user_check.get('emailVerificationCode')}")
+            print(f"🔍 DEBUG - Code expires: {user_check.get('emailVerificationExpires')}")
+            print(f"🔍 DEBUG - Current time: {datetime.utcnow()}")
+        else:
+            print(f"❌ DEBUG - No user found with email: {email}")
+        
+        # Find user with this email and code
+        user = await db.users().find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"},
+            "emailVerificationCode": code,
+            "emailVerificationExpires": {"$gt": datetime.utcnow()}
+        })
+        
+        if not user:
+            print(f"❌ DEBUG - Verification failed. Code mismatch or expired.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code"
+            )
+        
+        # Mark email as verified
+        await db.users().update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "emailVerified": True,
+                    "emailVerifiedAt": datetime.utcnow(),
+                },
+                "$unset": {
+                    "emailVerificationToken": "",
+                    "emailVerificationCode": "",
+                    "emailVerificationExpires": ""
+                }
+            }
+        )
+        
+        # Generate tokens for auto-login after verification
+        user_id = str(user["_id"])
+        access_token = create_access_token({
+            "sub": user_id,
+            "email": user["email"],
+            "verified": True
+        })
+        
+        refresh_token = create_refresh_token({"sub": user_id})
+        
+        # Store refresh token
+        await db.users().update_one(
+            {"_id": user["_id"]},
+            {"$push": {"refreshTokens": {
+                "token": refresh_token,
+                "createdAt": datetime.utcnow()
+            }}}
+        )
+        
+        # Return success with tokens
+        return {
+            "message": "Email verified successfully! You can now complete your profile.",
+            "emailVerified": True,
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "user": {
+                "id": user_id,
+                "email": user["email"],
+                "name": user["name"],
+                "emailVerified": True,
+                "profileComplete": False  # Still needs profile setup
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("alliv")
+        logger.error(f"Code verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email verification failed. Please try again."
+        )
+
+
+@router.options("/login")
+async def login_options():
+    """Handle CORS preflight for login endpoint"""
+    return JSONResponse(content={"status": "ok"}, status_code=200)
+
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, credentials: LoginRequest):
     """
     Enhanced login with security features - FIXED VERSION
+    Validates: user exists, email verified, account active, password correct
     """
     email = credentials.email.lower().strip()
     ip_address = get_remote_address(request)
     
-    # Generic error message for security
+    # Generic error message for security (don't reveal if email exists)
     generic_error = "Invalid email or password"
     
     # Check rate limit
@@ -210,13 +437,12 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         )
     
     try:
-        # Find user (case-insensitive) - ONLY email-registered users
+        # Find user (case-insensitive)
         user = await db.users().find_one({
-            "email": {"$regex": f"^{email}$", "$options": "i"},
-            "provider": "email",  # CRITICAL: Only allow email provider login
-            "active": True
+            "email": {"$regex": f"^{email}$", "$options": "i"}
         })
         
+        # CRITICAL: Don't reveal if email exists or not
         if not user:
             record_failed_attempt(email)
             raise HTTPException(
@@ -224,16 +450,32 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
                 detail=generic_error
             )
         
-        # Check if password exists
+        # Check if account is active
+        if not user.get("active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been deactivated. Please contact support."
+            )
+        
+        # Check if email verified (REQUIRED for email/password login)
+        if user.get("provider") == "email" and not user.get("emailVerified", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your email before logging in. Check your inbox."
+            )
+        
+        # Check if password exists (for OAuth users)
         if not user.get("passwordHash"):
             record_failed_attempt(email)
+            provider = user.get("provider", "social")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Please login with your social account"
+                detail=f"Please login with your {provider.title()} account"
             )
         
         # Verify password - CRITICAL FIX
-        password_valid = verify_password_hash(credentials.password, user["passwordHash"])
+        from ..security import verify_password as verify_pwd
+        password_valid = verify_pwd(credentials.password, user["passwordHash"])
         if not password_valid:
             record_failed_attempt(email)
             raise HTTPException(
@@ -254,7 +496,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         })
         
         # Generate refresh token
-        refresh_token = generate_refresh_token()
+        refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token in database
         await db.users().update_one(
@@ -275,6 +517,10 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             }
         )
         
+        # Get profile completion status
+        profile = await db.profiles().find_one({"userId": user_id})
+        profile_complete = profile.get("profileComplete", False) if profile else False
+        
         # Set refresh token in httpOnly cookie
         response.set_cookie(
             key="refresh_token",
@@ -287,9 +533,17 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         )
         
         return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "expires_in": 900
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "tokenType": "bearer",
+            "expiresIn": 900,
+            "user": {
+                "id": user_id,
+                "email": user["email"],
+                "name": user.get("name", ""),
+                "emailVerified": user.get("emailVerified", False),
+                "profileComplete": profile_complete  # Frontend checks this!
+            }
         }
         
     except HTTPException:
@@ -316,6 +570,27 @@ async def refresh_token(request: Request, response: Response):
             detail="Refresh token not found"
         )
     
+    # Validate token format (JWT should have 3 parts separated by dots)
+    if refresh_token.count('.') != 2:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token format"
+        )
+    
+    # Verify and decode token BEFORE database query
+    try:
+        payload = verify_refresh_token(refresh_token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token"
+            )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token validation failed"
+        )
+    
     try:
         # Find user with this refresh token
         user = await db.users().find_one({
@@ -326,7 +601,7 @@ async def refresh_token(request: Request, response: Response):
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token"
+                detail="Refresh token not found or expired"
             )
         
         # Generate new access token
@@ -337,8 +612,8 @@ async def refresh_token(request: Request, response: Response):
             "verified": user.get("emailVerified", False)
         })
         
-        # Rotate refresh token (optional but recommended)
-        new_refresh_token = generate_refresh_token()
+        # Rotate refresh token (security best practice)
+        new_refresh_token = create_refresh_token({"sub": user_id})
         
         # Update refresh tokens in database
         await db.users().update_one(
@@ -377,9 +652,10 @@ async def refresh_token(request: Request, response: Response):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Token refresh error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token refresh failed"
+            detail="Token refresh failed - please login again"
         )
 
 
@@ -425,16 +701,35 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         )
     
     try:
-        # Exchange code for user info (simplified - implement actual OAuth flow)
-        # This would involve calling the provider's token endpoint and user info endpoint
+        # Get OAuth credentials from settings
+        if provider == "google":
+            client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None)
+            client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', None)
+            redirect_uri = f"{getattr(settings, 'API_URL', 'http://localhost:8000')}/auth/oauth/google/callback"
+        elif provider == "github":
+            client_id = getattr(settings, 'GITHUB_CLIENT_ID', None)
+            client_secret = getattr(settings, 'GITHUB_CLIENT_SECRET', None)
+            redirect_uri = f"{getattr(settings, 'API_URL', 'http://localhost:8000')}/auth/oauth/github/callback"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported provider: {provider}"
+            )
         
-        # Mock user info from OAuth provider
-        oauth_user = {
-            "email": "oauth_user@example.com",
-            "name": "OAuth User",
-            "provider_id": "oauth_provider_id_123",
-            "avatar": "https://example.com/avatar.jpg"
-        }
+        if not client_id or not client_secret:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"OAuth {provider} credentials not configured"
+            )
+        
+        # Exchange code for user info (REAL implementation)
+        oauth_user = await get_oauth_user_info(
+            provider=provider,
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
         
         email = oauth_user["email"].lower()
         
@@ -555,10 +850,37 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         
     except HTTPException:
         raise
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="OAuth provider timeout - please try again"
+        )
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="OAuth rate limit exceeded - please wait and try again"
+            )
+        elif e.response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid OAuth authorization code"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"OAuth provider error (status: {e.response.status_code})"
+            )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cannot connect to OAuth provider - network error"
+        )
     except Exception as e:
+        print(f"❌ Unexpected OAuth error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OAuth authentication failed"
+            detail="OAuth authentication failed - unexpected error"
         )
 
 

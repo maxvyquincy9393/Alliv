@@ -1,30 +1,82 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { authAPI } from '../services/api';
 
 export const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { register } = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    // Validate password (match backend requirements)
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      setLoading(false);
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError('Password must contain at least one uppercase letter');
+      setLoading(false);
+      return;
+    }
+    if (!/[a-z]/.test(password)) {
+      setError('Password must contain at least one lowercase letter');
+      setLoading(false);
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Password must contain at least one digit');
+      setLoading(false);
       return;
     }
 
     try {
-      await register({ name, email, password });
-      navigate('/home');
-    } catch (err) {
-      setError('Registration failed. Please try again.');
+      // Step 1: Register user (OLD endpoint - creates user without sending email)
+      const registerResponse = await authAPI.register({
+        name,
+        email,
+        password,
+        birthdate: '' // Optional
+      });
+
+      if (registerResponse.error) {
+        throw new Error(registerResponse.error);
+      }
+
+      // Step 2: Request verification code (NEW production endpoint)
+      const verifyResponse = await authAPI.requestVerification({ email });
+      
+      if (verifyResponse.error) {
+        console.warn('Failed to send verification email, but registration succeeded');
+      }
+
+      // Step 3: Navigate to verification page
+      navigate('/verify-email', {
+        state: {
+          email: email,
+          fromRegister: true
+        }
+      });
+
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      if (err?.message?.includes('already registered')) {
+        setError('Email already registered. Please login instead.');
+      } else if (err?.message) {
+        setError(err.message);
+      } else {
+        setError('Registration failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,16 +146,26 @@ export const Register = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                placeholder="••••••••"
+                placeholder="Min 8 chars, uppercase, lowercase, digit"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Must be at least 8 characters with uppercase, lowercase, and a digit
+              </p>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-colors mt-6"
+              disabled={loading}
+              className="w-full py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-colors mt-6 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Create Account
+              {loading && (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 

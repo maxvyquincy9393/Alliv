@@ -2,23 +2,16 @@
 Pytest configuration and fixtures
 """
 import pytest
+import pytest_asyncio
 import asyncio
 from typing import AsyncGenerator, Generator
 from motor.motor_asyncio import AsyncIOMotorClient
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.config import Settings
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create event loop for async tests"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db() -> AsyncGenerator:
     """
     Create test database connection
@@ -34,12 +27,13 @@ async def test_db() -> AsyncGenerator:
     client.close()
 
 
-@pytest.fixture
-async def client() -> AsyncGenerator:
+@pytest_asyncio.fixture(scope="function")
+async def client() -> AsyncGenerator[AsyncClient, None]:
     """
     Create test HTTP client
     """
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 

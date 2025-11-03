@@ -2,12 +2,15 @@ import { motion } from 'framer-motion';
 import { User } from '../types/user';
 
 interface MatchModalProps {
-  user: User;
+  user: User | null;
   onClose: () => void;
   onSendMessage: () => void;
 }
 
 export const MatchModal = ({ user, onClose, onSendMessage }: MatchModalProps) => {
+  // Return null if no user provided
+  if (!user) return null;
+  
   return (
     <motion.div
       initial={{ opacity: 0 }}

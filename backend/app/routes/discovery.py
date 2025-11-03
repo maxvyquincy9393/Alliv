@@ -5,10 +5,15 @@ Handles: Online/Nearby discovery with AI-powered compatibility scoring
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
 from datetime import datetime
+from pymongo.errors import PyMongoError
+import logging
 import math
 
 from .. import db
 from ..auth import get_current_user
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/discover", tags=["Discovery"])
 
@@ -86,14 +91,20 @@ async def discover_online(
     current_user = Depends(get_current_user)
 ):
     """
-    Discover users in online mode
+    Discover users in online mode with comprehensive error handling
     Returns users with compatibility scores based on skills/interests
     """
     try:
-        # Get current user's profile
+        # ✅ Get current user's profile
         user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        
+        # ✅ Handle missing profile properly
         if not user_profile:
-            raise HTTPException(status_code=404, detail="User profile not found")
+            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found. Please complete your profile setup first."
+            )
         
         # Build query
         query = {
@@ -108,30 +119,43 @@ async def discover_online(
         profiles_cursor = db.profiles().find(query).limit(limit * 3)  # Get more for scoring
         profiles = await profiles_cursor.to_list(length=limit * 3)
         
+        # ✅ Handle empty results gracefully
+        if not profiles:
+            return {
+                "users": [],
+                "total": 0,
+                "mode": "online",
+                "message": "No users found matching your criteria"
+            }
+        
         # Calculate compatibility for each
         scored_profiles = []
         for profile in profiles:
-            compatibility = calculate_compatibility(user_profile, profile)
-            
-            # Get user info
-            user = await db.users().find_one({"_id": profile["userId"]})
-            if user:
-                scored_profiles.append({
-                    "id": str(profile["userId"]),
-                    "name": profile.get("name"),
-                    "age": profile.get("age"),
-                    "field": profile.get("field"),
-                    "bio": profile.get("bio"),
-                    "photos": profile.get("photos", []),
-                    "skills": profile.get("skills", []),
-                    "interests": profile.get("interests", []),
-                    "location": {
-                        "city": profile.get("location", {}).get("city", "Unknown"),
-                        "country": profile.get("location", {}).get("country", "Unknown"),
-                    } if not profile.get("location", {}).get("hideExact", False) else None,
-                    "compatibility": compatibility,
-                    "verified": user.get("verified", False),
-                })
+            try:
+                compatibility = calculate_compatibility(user_profile, profile)
+                
+                # Get user info
+                user = await db.users().find_one({"_id": profile["userId"]})
+                if user:
+                    scored_profiles.append({
+                        "id": str(profile["userId"]),
+                        "name": profile.get("name", "Unknown User"),
+                        "age": profile.get("age"),
+                        "field": profile.get("field"),
+                        "bio": profile.get("bio"),
+                        "photos": profile.get("photos", []),
+                        "skills": profile.get("skills", []),
+                        "interests": profile.get("interests", []),
+                        "location": {
+                            "city": profile.get("location", {}).get("city", "Unknown"),
+                            "country": profile.get("location", {}).get("country", "Unknown"),
+                        } if not profile.get("location", {}).get("hideExact", False) else None,
+                        "compatibility": compatibility,
+                        "verified": user.get("verified", False),
+                    })
+            except Exception as e:
+                logger.error(f"❌ Error processing profile {profile.get('userId')}: {str(e)}")
+                continue  # Skip this profile, continue with others
         
         # Sort by compatibility score (highest first)
         scored_profiles.sort(key=lambda x: x["compatibility"], reverse=True)
@@ -142,28 +166,45 @@ async def discover_online(
             "mode": "online"
         }
     
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except PyMongoError as e:
+        logger.error(f"❌ Database error in discover_online: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Unexpected error in discover_online: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve online users"
+        )
 
 
 @router.get("/nearby")
 async def discover_nearby(
-    lat: float = Query(..., description="User latitude"),
-    lon: float = Query(..., description="User longitude"),
+    lat: float = Query(..., ge=-90, le=90, description="User latitude"),
+    lon: float = Query(..., ge=-180, le=180, description="User longitude"),
     radiusKm: int = Query(25, ge=1, le=100, description="Search radius in km"),
     limit: int = Query(10, ge=1, le=50),
     field: Optional[str] = None,
     current_user = Depends(get_current_user)
 ):
     """
-    Discover users nearby using geolocation
+    Discover users nearby using geolocation with error handling
     Returns users sorted by distance and compatibility
     """
     try:
-        # Get current user's profile
+        # ✅ Get current user's profile
         user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        
         if not user_profile:
-            raise HTTPException(status_code=404, detail="User profile not found")
+            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found. Please complete your profile setup first."
+            )
         
         # Build query with geospatial search
         query = {
@@ -187,41 +228,55 @@ async def discover_nearby(
         profiles_cursor = db.profiles().find(query).limit(limit * 2)
         profiles = await profiles_cursor.to_list(length=limit * 2)
         
+        # ✅ Handle empty results
+        if not profiles:
+            return {
+                "users": [],
+                "total": 0,
+                "mode": "nearby",
+                "radius": radiusKm,
+                "message": f"No users found within {radiusKm}km radius"
+            }
+        
         # Calculate distance and compatibility for each
         nearby_users = []
         for profile in profiles:
-            # Calculate distance
-            profile_loc = profile.get("location", {})
-            if "coordinates" in profile_loc:
-                target_lon, target_lat = profile_loc["coordinates"]["coordinates"]
-                distance = haversine_distance(lat, lon, target_lat, target_lon)
-                
-                if distance <= radiusKm:
-                    # Calculate compatibility
-                    compatibility = calculate_compatibility(user_profile, profile, distance)
+            try:
+                # Calculate distance
+                profile_loc = profile.get("location", {})
+                if "coordinates" in profile_loc:
+                    target_lon, target_lat = profile_loc["coordinates"]["coordinates"]
+                    distance = haversine_distance(lat, lon, target_lat, target_lon)
                     
-                    # Get user info
-                    user = await db.users().find_one({"_id": profile["userId"]})
-                    if user:
-                        nearby_users.append({
-                            "id": str(profile["userId"]),
-                            "name": profile.get("name"),
-                            "age": profile.get("age"),
-                            "field": profile.get("field"),
-                            "bio": profile.get("bio"),
-                            "photos": profile.get("photos", []),
-                            "skills": profile.get("skills", []),
-                            "interests": profile.get("interests", []),
-                            "location": {
-                                "city": profile_loc.get("city", "Unknown"),
-                                "country": profile_loc.get("country", "Unknown"),
-                                "lat": target_lat if not profile_loc.get("hideExact", False) else None,
-                                "lon": target_lon if not profile_loc.get("hideExact", False) else None,
-                            },
-                            "distance": round(distance, 1),
-                            "compatibility": compatibility,
-                            "verified": user.get("verified", False),
-                        })
+                    if distance <= radiusKm:
+                        # Calculate compatibility
+                        compatibility = calculate_compatibility(user_profile, profile, distance)
+                        
+                        # Get user info
+                        user = await db.users().find_one({"_id": profile["userId"]})
+                        if user:
+                            nearby_users.append({
+                                "id": str(profile["userId"]),
+                                "name": profile.get("name", "Unknown User"),
+                                "age": profile.get("age"),
+                                "field": profile.get("field"),
+                                "bio": profile.get("bio"),
+                                "photos": profile.get("photos", []),
+                                "skills": profile.get("skills", []),
+                                "interests": profile.get("interests", []),
+                                "location": {
+                                    "city": profile_loc.get("city", "Unknown"),
+                                    "country": profile_loc.get("country", "Unknown"),
+                                    "lat": target_lat if not profile_loc.get("hideExact", False) else None,
+                                    "lon": target_lon if not profile_loc.get("hideExact", False) else None,
+                                },
+                                "distance": round(distance, 1),
+                                "compatibility": compatibility,
+                                "verified": user.get("verified", False),
+                            })
+            except Exception as e:
+                logger.error(f"❌ Error processing nearby profile {profile.get('userId')}: {str(e)}")
+                continue
         
         # Sort by compatibility (primary) and distance (secondary)
         nearby_users.sort(key=lambda x: (x["compatibility"], -x["distance"]), reverse=True)
@@ -233,8 +288,20 @@ async def discover_nearby(
             "radius": radiusKm
         }
     
+    except HTTPException:
+        raise
+    except PyMongoError as e:
+        logger.error(f"❌ Database error in discover_nearby: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Unexpected error in discover_nearby: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve nearby users"
+        )
 
 
 @router.get("/suggestions")
@@ -242,14 +309,19 @@ async def daily_suggestions(
     current_user = Depends(get_current_user)
 ):
     """
-    AI-powered daily recommendations
+    AI-powered daily recommendations with error handling
     Returns top 3 highly compatible users
     """
     try:
         # Get user profile
         user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        
         if not user_profile:
-            raise HTTPException(status_code=404, detail="User profile not found")
+            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Profile not found. Please complete your profile setup first."
+            )
         
         # Get all active profiles
         query = {
@@ -260,22 +332,34 @@ async def daily_suggestions(
         profiles_cursor = db.profiles().find(query).limit(50)
         profiles = await profiles_cursor.to_list(length=50)
         
+        # ✅ Handle empty results
+        if not profiles:
+            return {
+                "suggestions": [],
+                "date": datetime.now().isoformat(),
+                "message": "No suggestions available at the moment"
+            }
+        
         # Score all profiles
         suggestions = []
         for profile in profiles:
-            compatibility = calculate_compatibility(user_profile, profile)
-            
-            if compatibility >= 70:  # Only high matches
-                user = await db.users().find_one({"_id": profile["userId"]})
-                if user:
-                    suggestions.append({
-                        "id": str(profile["userId"]),
-                        "name": profile.get("name"),
-                        "field": profile.get("field"),
-                        "photo": profile.get("photos", [""])[0] if profile.get("photos") else "",
-                        "compatibility": compatibility,
-                        "reason": f"High match in {profile.get('field', 'collaboration')}"
-                    })
+            try:
+                compatibility = calculate_compatibility(user_profile, profile)
+                
+                if compatibility >= 70:  # Only high matches
+                    user = await db.users().find_one({"_id": profile["userId"]})
+                    if user:
+                        suggestions.append({
+                            "id": str(profile["userId"]),
+                            "name": profile.get("name", "Unknown User"),
+                            "field": profile.get("field"),
+                            "photo": profile.get("photos", [""])[0] if profile.get("photos") else "",
+                            "compatibility": compatibility,
+                            "reason": f"High match in {profile.get('field', 'collaboration')}"
+                        })
+            except Exception as e:
+                logger.error(f"❌ Error processing suggestion profile {profile.get('userId')}: {str(e)}")
+                continue
         
         # Return top 3
         suggestions.sort(key=lambda x: x["compatibility"], reverse=True)
@@ -285,5 +369,17 @@ async def daily_suggestions(
             "date": datetime.now().isoformat()
         }
     
+    except HTTPException:
+        raise
+    except PyMongoError as e:
+        logger.error(f"❌ Database error in daily_suggestions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service temporarily unavailable"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Unexpected error in daily_suggestions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate suggestions"
+        )

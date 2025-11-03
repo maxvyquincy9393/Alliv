@@ -10,8 +10,9 @@ class Settings:
     
     # Application
     NODE_ENV: str = os.getenv("NODE_ENV", "development")
+    DEBUG: bool = os.getenv("NODE_ENV", "development") == "development"  # Show debug info in dev mode
     PORT: int = int(os.getenv("PORT", "8080"))
-    CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:5173")
+    CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:3000")
     
     # Database
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017/alliv")

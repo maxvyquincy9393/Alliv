@@ -1,5 +1,6 @@
 """
 Security headers middleware for production
+UPDATED: Fixed deprecated headers, added CSP frame-ancestors, improved cache control
 """
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -12,13 +13,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     Add security headers to all responses
     
     Headers added:
-    - X-Frame-Options: Prevent clickjacking
     - X-Content-Type-Options: Prevent MIME sniffing
-    - X-XSS-Protection: Enable XSS protection
-    - Content-Security-Policy: Control resource loading
+    - Content-Security-Policy: Control resource loading + frame-ancestors (replaces X-Frame-Options)
     - Strict-Transport-Security: Enforce HTTPS
     - Referrer-Policy: Control referrer information
     - Permissions-Policy: Control browser features
+    - Cache-Control: Modern cache control (replaces Expires)
+    
+    Removed deprecated headers:
+    - X-Frame-Options (use CSP frame-ancestors instead)
+    - X-XSS-Protection (deprecated, browser built-in XSS protection)
     """
     
     async def dispatch(
@@ -28,25 +32,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         response = await call_next(request)
         
-        # Prevent clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
-        
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
         
-        # XSS Protection (legacy but still useful)
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        
-        # Content Security Policy
-        # Adjust based on your needs
+        # Content Security Policy with frame-ancestors (replaces X-Frame-Options)
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.googletagmanager.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
-            "connect-src 'self' https://apis.google.com; "
-            "frame-src 'self' https://accounts.google.com; "
+            "connect-src 'self' https://apis.google.com https://www.googleapis.com; "
+            "frame-src 'self' https://accounts.google.com https://github.com; "
+            "frame-ancestors 'none'; "  # Replaces X-Frame-Options: DENY
+            "base-uri 'self'; "
+            "form-action 'self'; "
         )
         response.headers["Content-Security-Policy"] = csp
         
@@ -69,6 +69,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "usb=()"
         )
         response.headers["Permissions-Policy"] = permissions_policy
+        
+        # Modern cache control (for API responses - use Cache-Control instead of Expires)
+        # No caching for API responses by default
+        if not response.headers.get("Cache-Control"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            response.headers["Pragma"] = "no-cache"
+        
+        # Remove deprecated/unnecessary headers if they exist
+        response.headers.pop("X-XSS-Protection", None)  # Deprecated
+        response.headers.pop("X-Frame-Options", None)  # Use CSP frame-ancestors instead
+        response.headers.pop("Expires", None)  # Use Cache-Control instead
         
         return response
 

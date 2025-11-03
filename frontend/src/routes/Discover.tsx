@@ -6,7 +6,6 @@ import { SwipeCard } from '../components/SwipeCard';
 import { MatchModal } from '../components/MatchModal';
 import { RadiusSlider } from '../components/RadiusSlider';
 import { MapPin, LayoutGrid, Map as MapIcon, Filter, Users, Navigation, X } from 'lucide-react';
-import { GlassButton } from '../components/GlassButton';
 import { fadeInUp, stagger } from '../lib/motion';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../hooks/useAuth';
@@ -59,7 +58,7 @@ export const Discover = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   // State
-  const [users, setUsers] = useState<ExtendedUser[]>(mockUsers);
+  const [users] = useState<ExtendedUser[]>(mockUsers); // Always use mock data for now
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<ExtendedUser | null>(null);
@@ -75,11 +74,12 @@ export const Discover = () => {
   const mapInstanceRef = useRef<any>(null);
   const { location, error: locationError, loading: locationLoading } = useGeolocation();
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    }
-  }, [isAuthenticated, navigate]);
+  // Temporarily disable auth check for debugging
+  // useEffect(() => {
+  //   if (!isAuthenticated) {
+  //     navigate('/login');
+  //   }
+  // }, [isAuthenticated, navigate]);
 
   // Update URL when view mode or radius changes
   useEffect(() => {
@@ -100,8 +100,8 @@ export const Discover = () => {
           
         const map = L.map(mapRef.current).setView(mapCenter, 13);
         
-        // Dark tile layer for dark theme
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // Light tile layer for white theme
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
           attribution: '© OpenStreetMap contributors, © CARTO'
         }).addTo(map);
 
@@ -190,9 +190,28 @@ export const Discover = () => {
     ? filteredUsers.filter(u => u.distance && u.distance <= radius)
     : filteredUsers;
 
+  // Debug log
+  console.log('Discover Debug:', {
+    isAuthenticated,
+    viewMode,
+    currentIndex,
+    usersCount: users.length,
+    filteredCount: filteredUsers.length,
+    nearbyCount: nearbyUsers.length
+  });
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Debug Info - Remove later */}
+        <div className="glass rounded-lg p-3 mb-4 text-xs text-white/60">
+          Auth: {isAuthenticated ? '✅' : '❌'} | 
+          Mode: {viewMode} | 
+          Users: {users.length} | 
+          Filtered: {filteredUsers.length} | 
+          Index: {currentIndex}
+        </div>
+
         {/* Header */}
         <div className="glass-strong rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between">
@@ -297,6 +316,11 @@ export const Discover = () => {
         {viewMode === 'cards' ? (
           /* Cards View */
           <div className="flex justify-center items-center min-h-[600px]">
+            {/* Test card visibility */}
+            <div className="absolute top-20 right-4 glass rounded-lg p-3 text-xs text-white/60 z-50">
+              Card {currentIndex + 1} of {filteredUsers.length}
+            </div>
+
             <AnimatePresence mode="wait">
               {currentIndex < filteredUsers.length ? (
                 <motion.div
@@ -307,6 +331,11 @@ export const Discover = () => {
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                   className="relative"
                 >
+                  {/* Debug card info */}
+                  <div className="absolute top-0 left-0 z-50 glass rounded-lg p-2 text-xs text-white">
+                    {filteredUsers[currentIndex].name}
+                  </div>
+
                   <SwipeCard
                     user={filteredUsers[currentIndex]}
                     onSwipe={handleSwipe}
@@ -329,9 +358,12 @@ export const Discover = () => {
                   <div className="text-6xl mb-4">🎯</div>
                   <h3 className="text-2xl font-bold text-white mb-2">No more profiles!</h3>
                   <p className="text-white/60 mb-6">Check back later for new matches</p>
-                  <GlassButton variant="primary" onClick={() => setCurrentIndex(0)}>
+                  <button
+                    onClick={() => setCurrentIndex(0)}
+                    className="px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
+                  >
                     Start Over
-                  </GlassButton>
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -417,13 +449,12 @@ export const Discover = () => {
                         </div>
                       </div>
                       
-                      <GlassButton
-                        variant="primary"
-                        fullWidth
+                      <button
                         onClick={() => handleConnect(selectedUser)}
+                        className="w-full px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
                       >
                         Connect
-                      </GlassButton>
+                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -441,18 +472,18 @@ export const Discover = () => {
                     <h3 className="text-xl font-bold text-white mb-2">No one nearby yet</h3>
                     <p className="text-white/60 mb-4">Try increasing your search radius or switch to Online mode</p>
                     <div className="flex gap-3 justify-center">
-                      <GlassButton
-                        variant="secondary"
+                      <button
                         onClick={() => setRadius(Math.min(50, radius + 10))}
+                        className="px-4 py-2 glass text-white hover:bg-white/10 rounded-lg transition-colors"
                       >
                         Increase Radius
-                      </GlassButton>
-                      <GlassButton
-                        variant="primary"
+                      </button>
+                      <button
                         onClick={() => setRadius(50)}
+                        className="px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
                       >
                         Go Online
-                      </GlassButton>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -472,11 +503,16 @@ export const Discover = () => {
       </div>
 
       {/* Match Modal */}
-      <MatchModal
-        isOpen={showMatch}
-        onClose={() => setShowMatch(false)}
-        user={matchedUser}
-      />
+      {showMatch && (
+        <MatchModal
+          onClose={() => setShowMatch(false)}
+          user={matchedUser}
+          onSendMessage={() => {
+            setShowMatch(false);
+            navigate('/messages');
+          }}
+        />
+      )}
 
       {/* Map Styles */}
       <style>{`

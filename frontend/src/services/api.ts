@@ -28,11 +28,11 @@ interface OAuthProvider {
 }
 
 interface VerificationRequest {
-  channel: 'email' | 'phone';
-  destination: string;
+  email: string;
 }
 
 interface VerificationConfirm {
+  email: string;
   code: string;
 }
 
@@ -183,7 +183,7 @@ export const authAPI = {
    * Confirm OTP code
    */
   confirmVerification: async (data: VerificationConfirm) => {
-    return fetchAPI('/auth/verify/confirm', {
+    return fetchAPI('/auth/verify-email-code', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -233,26 +233,69 @@ export const uploadAPI = {
    * Get presigned upload URL
    */
   getPresignURL: async () => {
-    return fetchAPI<{ url: string; public_id: string }>('/uploads/presign', {
+    return fetchAPI<{
+      timestamp: number;
+      signature: string;
+      api_key: string;
+      cloud_name: string;
+      public_id: string;
+      folder: string;
+    }>('/uploads/presign', {
       method: 'POST',
     });
   },
 
   /**
-   * Complete upload
+   * Complete upload after Cloudinary upload
    */
-  completeUpload: async (publicId: string) => {
+  completeUpload: async (publicId: string, url: string) => {
     return fetchAPI('/uploads/complete', {
       method: 'POST',
-      body: JSON.stringify({ public_id: publicId }),
+      body: JSON.stringify({ public_id: publicId, url }),
     });
   },
 
   /**
-   * Upload file to Cloudinary
+   * Delete photo by index
    */
-  uploadToCloudinary: async (file: File): Promise<string | null> => {
+  deletePhoto: async (photoIndex: number) => {
+    return fetchAPI(`/uploads/photo/${photoIndex}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Get upload statistics
+   */
+  getStats: async () => {
+    return fetchAPI<{
+      currentPhotoCount: number;
+      maxPhotos: number;
+      uploadsInLastHour: number;
+      maxUploadsPerHour: number;
+      canUpload: boolean;
+    }>('/uploads/stats');
+  },
+
+  /**
+   * Upload file to Cloudinary using presigned URL
+   */
+  uploadToCloudinary: async (
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<{ url: string; publicId: string } | null> => {
     try {
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('File too large. Maximum size is 5MB');
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Invalid file type. Only JPG, PNG, and WEBP are allowed');
+      }
+
       // Get presigned URL
       const presignResponse = await uploadAPI.getPresignURL();
       if (!presignResponse.data) {
@@ -260,16 +303,48 @@ export const uploadAPI = {
         return null;
       }
 
-      const { url, public_id } = presignResponse.data;
+      const {
+        timestamp,
+        signature,
+        api_key,
+        cloud_name,
+        public_id,
+        folder
+      } = presignResponse.data;
 
       // Upload to Cloudinary
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('timestamp', timestamp.toString());
+      formData.append('signature', signature);
+      formData.append('api_key', api_key);
       formData.append('public_id', public_id);
+      formData.append('folder', folder);
 
-      const uploadResponse = await fetch(url, {
-        method: 'POST',
-        body: formData,
+      // Upload with progress tracking
+      const uploadResponse = await new Promise<Response>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && onProgress) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(new Response(xhr.response));
+          } else {
+            reject(new Error(`Upload failed: ${xhr.statusText}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`);
+        xhr.send(formData);
       });
 
       if (!uploadResponse.ok) {
@@ -279,13 +354,24 @@ export const uploadAPI = {
 
       const uploadData = await uploadResponse.json();
 
-      // Complete upload
-      await uploadAPI.completeUpload(public_id);
+      // Complete upload (save to database)
+      const completeResponse = await uploadAPI.completeUpload(
+        public_id,
+        uploadData.secure_url
+      );
 
-      return uploadData.secure_url;
+      if (!completeResponse.data) {
+        console.error('Failed to complete upload');
+        return null;
+      }
+
+      return {
+        url: uploadData.secure_url,
+        publicId: public_id
+      };
     } catch (error) {
       console.error('Upload error:', error);
-      return null;
+      throw error;
     }
   },
 };

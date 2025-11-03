@@ -2,7 +2,7 @@ import { User, AuthUser } from '../types/user';
 import { Match } from '../types/match';
 import { Message } from '../types/message';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Mock data for development
 const mockUsers: User[] = [
@@ -68,7 +68,8 @@ class API {
 
   getToken() {
     if (!this.token) {
-      this.token = localStorage.getItem('auth_token');
+      // Check both auth_token (old) and access_token (new from email verification)
+      this.token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
     }
     return this.token;
   }
@@ -98,7 +99,19 @@ class API {
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.statusText}`);
+        // Try to parse error details from backend
+        let errorMessage = response.statusText;
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch {
+          // If can't parse JSON, use statusText
+        }
+        throw new Error(errorMessage);
       }
 
       return await response.json();
@@ -109,48 +122,94 @@ class API {
   }
 
   // Auth endpoints
-  async login(email: string, _password: string): Promise<AuthUser> {
-    // Mock implementation
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const mockUser: AuthUser = {
-          id: 'current-user',
-          name: 'You',
-          age: 27,
-          bio: 'Software Developer',
-          avatar: 'https://i.pravatar.cc/400?img=33',
-          skills: ['TypeScript', 'React', 'Node.js'],
-          email,
-          token: 'mock-token-' + Date.now(),
-        };
-        this.setToken(mockUser.token!);
-        resolve(mockUser);
-      }, 500);
+  async login(email: string, password: string): Promise<AuthUser & { profileComplete?: boolean }> {
+    // REAL API CALL - Not mock!
+    const response = await this.request<{
+      accessToken: string;
+      refreshToken: string;
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        emailVerified: boolean;
+        profileComplete: boolean;
+      };
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
     });
+
+    // Store tokens
+    this.setToken(response.accessToken);
+    localStorage.setItem('refresh_token', response.refreshToken);
+
+    // Return user with profileComplete flag
+    const authUser: AuthUser & { profileComplete?: boolean } = {
+      id: response.user.id,
+      name: response.user.name,
+      email: response.user.email,
+      age: 0, // Will be filled from profile
+      bio: '',
+      avatar: '',
+      skills: [],
+      interests: [], // Add missing field
+      token: response.accessToken,
+      profileComplete: response.user.profileComplete, // IMPORTANT!
+    };
+
+    return authUser;
   }
 
   async register(data: {
     name: string;
     email: string;
     password: string;
-  }): Promise<AuthUser> {
-    // Mock implementation
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const mockUser: AuthUser = {
-          id: 'current-user',
-          name: data.name,
-          age: 27,
-          bio: 'New to Alliv',
-          avatar: 'https://i.pravatar.cc/400?img=33',
-          skills: [],
-          email: data.email,
-          token: 'mock-token-' + Date.now(),
-        };
-        this.setToken(mockUser.token!);
-        resolve(mockUser);
-      }, 500);
+  }): Promise<any> {  // Changed to 'any' to handle both response types
+    // REAL API CALL - Not mock!
+    const response = await this.request<any>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        birthdate: '1990-01-01', // Default for now
+      }),
     });
+
+    // NEW: Check if email verification required
+    if (response.requiresEmailVerification) {
+      // Return verification data (no tokens yet)
+      return {
+        requiresEmailVerification: true,
+        emailSent: response.emailSent,
+        verificationToken: response.verificationToken,  // Dev only
+        verificationLink: response.verificationLink,    // Dev only
+        message: response.message,
+      };
+    }
+
+    // OLD: If tokens provided (OAuth or no verification needed)
+    if (response.accessToken) {
+      this.setToken(response.accessToken);
+      localStorage.setItem('refresh_token', response.refreshToken);
+
+      // Return user with profileComplete flag
+      const authUser: AuthUser & { profileComplete?: boolean } = {
+        id: response.user.id,
+        name: response.user.name,
+        email: response.user.email,
+        age: 0,
+        bio: '',
+        avatar: '',
+        skills: [],
+        interests: [], // Add missing field
+        token: response.accessToken,
+        profileComplete: response.user.profileComplete,
+      };
+
+      return authUser;
+    }
+
+    // Fallback
+    return response;
   }
 
   async logout(): Promise<void> {

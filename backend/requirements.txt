@@ -4,6 +4,10 @@ uvicorn[standard]==0.27.0
 pydantic[email]==2.6.0
 pydantic-settings==2.1.0
 slowapi==0.1.9
+psutil==5.9.8
+
+# Monitoring & Error Tracking
+sentry-sdk[fastapi]==1.40.0
 
 # Database
 motor==3.3.2

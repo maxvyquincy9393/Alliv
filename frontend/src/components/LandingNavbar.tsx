@@ -20,8 +20,13 @@ export const LandingNavbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="text-2xl font-semibold text-black hover:opacity-70 transition-opacity">
-            Alliv
+          <Link to="/" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
+            <img 
+              src="/logo/alivvlogo.png" 
+              alt="Alivv Logo" 
+              className="w-8 h-8 object-contain"
+            />
+            <span className="text-2xl font-semibold text-black">Alivv</span>
           </Link>
 
           {/* Navigation Links */}

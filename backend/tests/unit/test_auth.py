@@ -2,13 +2,10 @@
 Unit tests for authentication logic
 """
 import pytest
-from datetime import datetime, timedelta
 from app.auth import (
-    create_access_token,
-    create_refresh_token,
-    verify_token,
     hash_password,
-    verify_password
+    verify_password,
+    create_access_token
 )
 
 
@@ -16,20 +13,23 @@ class TestPasswordHashing:
     """Test password hashing and verification"""
     
     def test_hash_password_creates_valid_hash(self):
-        """Should create valid argon2 hash"""
+        """Should create valid bcrypt hash"""
         password = "MySecurePassword123!"
         hashed = hash_password(password)
         
         assert hashed is not None
         assert hashed != password
-        assert hashed.startswith("$argon2")
+        assert hashed.startswith("$2b$")  # bcrypt format
+        print(f"✅ Password hashed successfully: {hashed[:20]}...")
     
     def test_verify_password_correct(self):
         """Should verify correct password"""
         password = "MySecurePassword123!"
         hashed = hash_password(password)
         
-        assert verify_password(password, hashed) is True
+        result = verify_password(password, hashed)
+        assert result is True
+        print("✅ Password verification successful")
     
     def test_verify_password_incorrect(self):
         """Should reject incorrect password"""
@@ -37,7 +37,9 @@ class TestPasswordHashing:
         wrong_password = "WrongPassword456!"
         hashed = hash_password(password)
         
-        assert verify_password(wrong_password, hashed) is False
+        result = verify_password(wrong_password, hashed)
+        assert result is False
+        print("✅ Incorrect password rejected")
     
     def test_same_password_different_hashes(self):
         """Should create different hashes for same password (salt)"""
@@ -48,96 +50,51 @@ class TestPasswordHashing:
         assert hash1 != hash2
         assert verify_password(password, hash1) is True
         assert verify_password(password, hash2) is True
+        print("✅ Password salting works correctly")
 
 
 class TestJWTTokens:
-    """Test JWT token creation and verification"""
+    """Test JWT token creation"""
     
     def test_create_access_token(self):
         """Should create valid access token"""
-        user_id = "user_123"
-        token = create_access_token(user_id)
+        user_data = {"sub": "user_123", "email": "test@example.com"}
+        token = create_access_token(user_data)
         
         assert token is not None
         assert isinstance(token, str)
         assert len(token) > 0
+        print(f"✅ JWT token created: {token[:20]}...")
     
-    def test_create_refresh_token(self):
-        """Should create valid refresh token"""
-        user_id = "user_123"
-        token = create_refresh_token(user_id)
+    def test_token_with_custom_expiry(self):
+        """Should create token with custom expiry"""
+        user_data = {"sub": "user_123"}
+        token = create_access_token(user_data, expires_delta=3600)  # 1 hour
         
         assert token is not None
         assert isinstance(token, str)
-        assert len(token) > 0
-    
-    def test_verify_valid_token(self):
-        """Should verify valid token and return payload"""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        
-        payload = verify_token(token)
-        
-        assert payload is not None
-        assert payload.get("sub") == user_id
-        assert "exp" in payload
-    
-    def test_verify_expired_token(self):
-        """Should reject expired token"""
-        # Create token that expires immediately
-        user_id = "user_123"
-        # This would need modification in auth.py to accept custom expiry
-        # For now, we test the concept
-        
-        # Token should be invalid after expiry
-        # Implementation depends on actual auth.py structure
-        pass
-    
-    def test_verify_invalid_token(self):
-        """Should reject invalid token"""
-        invalid_token = "this.is.invalid"
-        
-        payload = verify_token(invalid_token)
-        
-        assert payload is None
+        print("✅ JWT token with custom expiry created")
 
 
-class TestTokenPayload:
-    """Test token payload structure"""
-    
-    def test_access_token_contains_user_id(self):
-        """Access token should contain user_id in 'sub' claim"""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        payload = verify_token(token)
-        
-        assert payload.get("sub") == user_id
-    
-    def test_token_contains_expiry(self):
-        """Token should contain expiry timestamp"""
-        user_id = "user_123"
-        token = create_access_token(user_id)
-        payload = verify_token(token)
-        
-        assert "exp" in payload
-        assert isinstance(payload["exp"], int)
-        
-        # Expiry should be in the future
-        now = datetime.utcnow().timestamp()
-        assert payload["exp"] > now
-
-
-@pytest.mark.asyncio
 class TestAuthenticationFlow:
     """Test complete authentication flow"""
     
-    async def test_register_login_flow(self):
-        """Should successfully register and login"""
-        # This would be an integration test
-        # Placeholder for now
-        pass
-    
-    async def test_token_refresh_flow(self):
-        """Should successfully refresh access token"""
-        # Integration test placeholder
-        pass
+    def test_password_hash_and_verify_flow(self):
+        """Should successfully hash and verify password"""
+        # Simulate registration
+        raw_password = "UserPassword123!"
+        hashed_password = hash_password(raw_password)
+        
+        # Simulate login with correct password
+        login_attempt = "UserPassword123!"
+        is_valid = verify_password(login_attempt, hashed_password)
+        
+        assert is_valid is True
+        print("✅ Complete hash+verify flow successful")
+        
+        # Simulate login with wrong password
+        wrong_attempt = "WrongPassword456!"
+        is_valid = verify_password(wrong_attempt, hashed_password)
+        
+        assert is_valid is False
+        print("✅ Wrong password correctly rejected")

@@ -7,6 +7,7 @@ export const Landing = () => {
     <div className="min-h-screen bg-white text-black overflow-x-hidden">
       <LandingNavbar />
       
+
       {/* Hero Section - Apple Style */}
       <section className="min-h-screen flex flex-col items-center justify-center px-4 py-20 pt-24">
         <motion.div
@@ -16,13 +17,26 @@ export const Landing = () => {
           className="text-center max-w-4xl mx-auto"
         >
           {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+            className="flex justify-center mb-8"
+          >
+            <img 
+              src="/logo/alivvlogo.png" 
+              alt="Alivv Logo" 
+              className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 object-contain"
+            />
+          </motion.div>
+
           <motion.h1
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.3 }}
             className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold mb-6 tracking-tight"
           >
-            Alliv
+            Alivv
           </motion.h1>
 
           {/* Tagline */}
@@ -146,7 +160,7 @@ export const Landing = () => {
       <footer className="py-12 px-4 border-t border-gray-200">
         <div className="max-w-6xl mx-auto text-center">
           <p className="text-gray-500 text-sm">
-            © 2025 Alliv. All rights reserved.
+            © 2025 Alivv. All rights reserved.
           </p>
         </div>
       </footer>

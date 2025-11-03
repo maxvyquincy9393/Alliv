@@ -78,66 +78,6 @@ async def compute_match_candidates(user: dict, limit: int = 20) -> List[dict]:
     return top_candidates
 
 
-async def add_like(from_id: str, to_id: str) -> dict:
-    """
-    Add a like and check for mutual match
-    Returns: {"match": bool, "match_data": dict or None}
-    """
-    # Check if like already exists
-    existing = await db.likes().find_one({"from": from_id, "to": to_id})
-    if existing:
-        return {"match": False, "match_data": None}
-    
-    # Create like
-    like_doc = {
-        "_id": f"like::{str(uuid.uuid4())}",
-        "from": from_id,
-        "to": to_id,
-        "created_at": datetime.utcnow()
-    }
-    await db.likes().insert_one(like_doc)
-    
-    # Check for mutual like
-    mutual_like = await db.likes().find_one({"from": to_id, "to": from_id})
-    
-    if mutual_like:
-        # Create match
-        match_doc = {
-            "_id": f"match::{str(uuid.uuid4())}",
-            "users": [from_id, to_id],
-            "created_at": datetime.utcnow(),
-            "status": "active"
-        }
-        await db.matches().insert_one(match_doc)
-        
-        return {"match": True, "match_data": match_doc}
-    
-    return {"match": False, "match_data": None}
-
-
-async def get_user_matches(user_id: str) -> List[dict]:
-    """Get all matches for a user"""
-    cursor = db.matches().find({
-        "users": user_id,
-        "status": "active"
-    }).sort("created_at", -1)
-    
-    match_list = await cursor.to_list(length=100)
-    
-    # Enrich with other user data
-    enriched_matches = []
-    for match in match_list:
-        other_user_id = match["users"][0] if match["users"][1] == user_id else match["users"][1]
-        other_user = await get_user_by_id(other_user_id)
-        
-        if other_user:
-            # Remove sensitive data
-            other_user.pop("password_hash", None)
-            match["other_user"] = other_user
-            enriched_matches.append(match)
-    
-    return enriched_matches
-
 
 async def create_message(match_id: str, sender_id: str, content: str) -> dict:
     """Create a new message"""

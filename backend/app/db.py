@@ -91,6 +91,12 @@ async def create_indices():
         await _db.reports.create_index("targetUserId")
         await _db.blocks.create_index([("userId", 1), ("targetUserId", 1)], unique=True)
         
+        # Verifications indices (PRODUCTION EMAIL VERIFICATION)
+        await _db.verifications.create_index([("userId", 1), ("channel", 1), ("consumed", 1)])
+        await _db.verifications.create_index("token")  # For magic link lookup
+        # TTL index - MongoDB auto-deletes expired documents
+        await _db.verifications.create_index("expiresAt", expireAfterSeconds=0)
+        
         logger.info("✅ Database indices created")
     except Exception as e:
         logger.warning(f"⚠️ Error creating indices: {e}")

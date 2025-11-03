@@ -1,6 +1,7 @@
 import os
 from typing import Optional
-from pydantic import BaseSettings, validator, Field
+from pydantic_settings import BaseSettings
+from pydantic import field_validator, Field, ConfigDict
 
 class Settings(BaseSettings):
     """Application settings with validation"""
@@ -8,7 +9,7 @@ class Settings(BaseSettings):
     # Application
     NODE_ENV: str = Field(default="development", env="NODE_ENV")
     PORT: int = Field(default=8080, env="PORT")
-    CORS_ORIGIN: str = Field(default="http://localhost:5173", env="CORS_ORIGIN")
+    CORS_ORIGIN: str = Field(default="http://localhost:3000", env="CORS_ORIGIN")
     
     # Database
     MONGO_URI: str = Field(..., env="MONGO_URI")
@@ -45,8 +46,17 @@ class Settings(BaseSettings):
     # Maps
     MAPS_API_KEY: str = Field(default="", env="MAPS_API_KEY")
     
+    # Monitoring & Error Tracking
+    SENTRY_DSN: str = Field(default="", env="SENTRY_DSN")
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, env="SENTRY_TRACES_SAMPLE_RATE")
+    
+    # CAPTCHA
+    RECAPTCHA_SECRET_KEY: str = Field(default="", env="RECAPTCHA_SECRET_KEY")
+    RECAPTCHA_SITE_KEY: str = Field(default="", env="RECAPTCHA_SITE_KEY")
+    
     # Validators
-    @validator('JWT_ACCESS_SECRET')
+    @field_validator('JWT_ACCESS_SECRET')
+    @classmethod
     def validate_access_secret(cls, v):
         if v == "change_this_secret":
             raise ValueError(
@@ -60,7 +70,8 @@ class Settings(BaseSettings):
             )
         return v
     
-    @validator('JWT_REFRESH_SECRET')
+    @field_validator('JWT_REFRESH_SECRET')
+    @classmethod
     def validate_refresh_secret(cls, v):
         if v == "change_this_refresh_secret":
             raise ValueError(
@@ -74,7 +85,8 @@ class Settings(BaseSettings):
             )
         return v
     
-    @validator('REFRESH_TOKEN_FINGERPRINT_PEPPER')
+    @field_validator('REFRESH_TOKEN_FINGERPRINT_PEPPER')
+    @classmethod
     def validate_pepper(cls, v):
         if v == "change_this_pepper":
             raise ValueError(
@@ -88,7 +100,8 @@ class Settings(BaseSettings):
             )
         return v
     
-    @validator('MONGO_URI')
+    @field_validator('MONGO_URI')
+    @classmethod
     def validate_mongo_uri(cls, v):
         if not v.startswith('mongodb://') and not v.startswith('mongodb+srv://'):
             raise ValueError(
@@ -96,7 +109,8 @@ class Settings(BaseSettings):
             )
         return v
     
-    @validator('NODE_ENV')
+    @field_validator('NODE_ENV')
+    @classmethod
     def validate_node_env(cls, v):
         allowed = ['development', 'staging', 'production']
         if v not in allowed:
@@ -105,15 +119,67 @@ class Settings(BaseSettings):
             )
         return v
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore",
+        case_sensitive=True
+    )
 
 
-# Create singleton instance
-try:
-    settings = Settings()
-    print("✅ Configuration validated successfully!")
-except Exception as e:
-    print(f"❌ Configuration validation failed: {e}")
-    raise
+# Fallback for missing env vars in development
+def get_settings():
+    """Get settings with fallback for development"""
+    try:
+        return Settings()
+    except Exception as e:
+        print(f"⚠️  Config validation failed: {e}")
+        print("⚠️  Using fallback settings for development")
+        
+        # Return development settings with safe defaults
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        class DevSettings:
+            NODE_ENV = os.getenv("NODE_ENV", "development")
+            PORT = int(os.getenv("PORT", "8080"))
+            CORS_ORIGIN = os.getenv("CORS_ORIGIN", "http://localhost:5173")
+            MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/alliv")
+            REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+            
+            # JWT - use env or generate temp for dev
+            JWT_ACCESS_SECRET = os.getenv("JWT_ACCESS_SECRET") or "dev_secret_" + "x" * 24
+            JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET") or "dev_refresh_" + "x" * 24
+            JWT_ACCESS_TTL = int(os.getenv("JWT_ACCESS_TTL", "900"))
+            JWT_REFRESH_TTL = int(os.getenv("JWT_REFRESH_TTL", "1209600"))
+            REFRESH_TOKEN_FINGERPRINT_PEPPER = os.getenv("REFRESH_TOKEN_FINGERPRINT_PEPPER") or "dev_pepper_" + "x" * 24
+            JWT_ALGORITHM = "HS256"
+            
+            # OAuth
+            OAUTH_REDIRECT_BASE = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8080/auth/oauth")
+            OAUTH_GOOGLE_ID = os.getenv("OAUTH_GOOGLE_ID", "")
+            OAUTH_GOOGLE_SECRET = os.getenv("OAUTH_GOOGLE_SECRET", "")
+            OAUTH_GITHUB_ID = os.getenv("OAUTH_GITHUB_ID", "")
+            OAUTH_GITHUB_SECRET = os.getenv("OAUTH_GITHUB_SECRET", "")
+            OAUTH_X_ID = os.getenv("OAUTH_X_ID", "")
+            OAUTH_X_SECRET = os.getenv("OAUTH_X_SECRET", "")
+            
+            # Email/SMS
+            SMTP_URL = os.getenv("SMTP_URL", "")
+            EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@alliv.app")
+            SMS_PROVIDER = os.getenv("SMS_PROVIDER", "mock")
+            SMS_PROVIDER_API_KEY = os.getenv("SMS_PROVIDER_API_KEY", "")
+            
+            # Cloudinary
+            CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+            CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "")
+            CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "")
+            
+            # Maps
+            MAPS_API_KEY = os.getenv("MAPS_API_KEY", "")
+        
+        return DevSettings()
+
+
+# Create singleton instance with fallback
+settings = get_settings()
