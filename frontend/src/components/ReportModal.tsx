@@ -1,104 +1,183 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { X, AlertTriangle, Shield, User, MessageSquare, Camera } from 'lucide-react';
+import { X, AlertTriangle, Shield, User, MessageSquare, Camera, Upload } from 'lucide-react';
 import { GlassButton } from './GlassButton';
+import axios from 'axios';
 
 interface ReportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  targetUser?: {
+  targetUser: {
     id: string;
     name: string;
-    avatar: string;
+    avatar?: string;
   };
-  onSubmit: (report: ReportData) => void;
-}
-
-interface ReportData {
-  reason: string;
-  details: string;
-  evidence: string[];
-  urgent: boolean;
+  context?: {
+    matchId?: string;
+    messageId?: string;
+    projectId?: string;
+  };
 }
 
 const reportReasons = [
   {
-    id: 'fake_profile',
-    label: 'Fake Profile',
-    description: 'Photo palsu, info bohong, atau catfish',
-    icon: User
-  },
-  {
     id: 'harassment',
     label: 'Harassment',
-    description: 'Perilaku tidak pantas atau mengganggu',
+    description: 'Threatening, bullying, or harassing behavior',
     icon: AlertTriangle
   },
   {
     id: 'spam',
-    label: 'Spam/Scam',
-    description: 'Promosi berlebihan atau penipuan',
+    label: 'Spam',
+    description: 'Excessive promotion or spam messages',
     icon: MessageSquare
   },
   {
-    id: 'inappropriate_content',
+    id: 'inappropriate',
     label: 'Inappropriate Content',
-    description: 'Konten tidak sesuai atau melanggar',
+    description: 'Offensive or inappropriate content',
     icon: Camera
   },
   {
+    id: 'fake',
+    label: 'Fake Profile',
+    description: 'Fake photos, catfish, or impersonation',
+    icon: User
+  },
+  {
     id: 'other',
-    label: 'Lainnya',
-    description: 'Pelanggaran lain yang perlu dilaporkan',
+    label: 'Other',
+    description: 'Other violations of community guidelines',
     icon: Shield
   }
 ];
 
-export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportModalProps) => {
+const CLOUDINARY_UPLOAD_PRESET = 'colabmatch_reports';
+const CLOUDINARY_CLOUD_NAME = 'your_cloud_name'; // TODO: Update with actual cloud name
+
+export const ReportModal = ({ isOpen, onClose, targetUser, context }: ReportModalProps) => {
   const [selectedReason, setSelectedReason] = useState('');
   const [details, setDetails] = useState('');
   const [evidence, setEvidence] = useState<string[]>([]);
-  const [urgent, setUrgent] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('folder', 'reports');
+
+    try {
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        formData
+      );
+      return response.data.secure_url;
+    } catch (err) {
+      console.error('Upload failed:', err);
+      throw new Error('Failed to upload screenshot');
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!selectedReason || !details.trim()) return;
+    if (!selectedReason || details.trim().length < 20) {
+      setError('Please provide at least 20 characters describing the issue');
+      return;
+    }
+
+    if (details.trim().length > 1000) {
+      setError('Description cannot exceed 1000 characters');
+      return;
+    }
 
     setSubmitting(true);
+    setError('');
+
     try {
-      await onSubmit({
-        reason: selectedReason,
-        details,
-        evidence,
-        urgent
-      });
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Please login to submit a report');
+      }
+
+      const reportData = {
+        targetId: targetUser.id,
+        type: selectedReason,
+        reason: details.trim(),
+        evidence: evidence,
+        context: context || {}
+      };
+
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/reports`,
+        reportData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Report submitted:', response.data);
+      setSuccess(true);
       
-      // Reset form
-      setSelectedReason('');
-      setDetails('');
-      setEvidence([]);
-      setUrgent(false);
-      onClose();
-    } catch (error) {
-      console.error('Failed to submit report:', error);
+      // Show success message for 2 seconds, then close
+      setTimeout(() => {
+        setSelectedReason('');
+        setDetails('');
+        setEvidence([]);
+        setSuccess(false);
+        onClose();
+      }, 2000);
+
+    } catch (err: any) {
+      console.error('Failed to submit report:', err);
+      
+      if (err.response?.status === 400) {
+        if (err.response.data.detail?.includes('already reported')) {
+          setError('You have already reported this user recently');
+        } else if (err.response.data.detail?.includes('cannot report yourself')) {
+          setError('You cannot report yourself');
+        } else {
+          setError(err.response.data.detail || 'Invalid report data');
+        }
+      } else if (err.response?.status === 404) {
+        setError('User not found');
+      } else if (err.response?.status === 401) {
+        setError('Please login to submit a report');
+      } else {
+        setError('Failed to submit report. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleEvidenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    const newEvidence: string[] = [];
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        newEvidence.push(reader.result as string);
-        setEvidence([...evidence, ...newEvidence]);
-      };
-      reader.readAsDataURL(file);
-    });
+    // Limit to 3 screenshots
+    if (evidence.length + files.length > 3) {
+      setError('Maximum 3 screenshots allowed');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const uploadPromises = Array.from(files).map(file => uploadToCloudinary(file));
+      const urls = await Promise.all(uploadPromises);
+      setEvidence([...evidence, ...urls]);
+    } catch (err) {
+      setError('Failed to upload screenshots. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -199,21 +278,30 @@ export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportMod
               {/* Details */}
               <div className="mb-4">
                 <label className="text-white/80 text-sm font-medium mb-2 block">
-                  Detail kejadian:
+                  Describe what happened <span className="text-red-500">*</span>
+                  <span className="text-white/40 text-xs ml-2">
+                    ({details.length}/1000, min 20)
+                  </span>
                 </label>
                 <textarea
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
-                  placeholder="Jelaskan apa yang terjadi..."
+                  placeholder="Please provide details about the violation..."
                   className="w-full p-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-red-500/50 transition-colors resize-none"
                   rows={4}
+                  maxLength={1000}
                 />
+                {details.length > 0 && details.length < 20 && (
+                  <p className="text-red-400 text-xs mt-1">
+                    Please provide at least 20 characters
+                  </p>
+                )}
               </div>
 
               {/* Evidence Upload */}
               <div className="mb-4">
                 <label className="text-white/80 text-sm font-medium mb-2 block">
-                  Bukti screenshot (opsional):
+                  Evidence (screenshots, max 3):
                 </label>
                 <input
                   type="file"
@@ -222,13 +310,20 @@ export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportMod
                   onChange={handleEvidenceUpload}
                   className="hidden"
                   id="evidence-upload"
+                  disabled={evidence.length >= 3 || uploading}
                 />
                 <label 
                   htmlFor="evidence-upload"
-                  className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-white/20 rounded-xl hover:border-white/40 cursor-pointer transition-colors"
+                  className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-xl transition-colors ${
+                    evidence.length >= 3 || uploading
+                      ? 'border-white/10 cursor-not-allowed opacity-50'
+                      : 'border-white/20 hover:border-white/40 cursor-pointer'
+                  }`}
                 >
                   <Camera className="w-5 h-5 text-white/40" />
-                  <span className="text-white/60 text-sm">Upload screenshot</span>
+                  <span className="text-white/60 text-sm">
+                    {uploading ? 'Uploading...' : `Upload screenshot (${evidence.length}/3)`}
+                  </span>
                 </label>
                 
                 {/* Evidence Preview */}
@@ -243,7 +338,8 @@ export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportMod
                         />
                         <button
                           onClick={() => setEvidence(evidence.filter((_, i) => i !== index))}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                          disabled={submitting}
                         >
                           <X className="w-3 h-3 text-white" />
                         </button>
@@ -253,18 +349,41 @@ export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportMod
                 )}
               </div>
 
-              {/* Urgent Flag */}
-              <label className="flex items-center gap-3 mb-6 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={urgent}
-                  onChange={(e) => setUrgent(e.target.checked)}
-                  className="w-5 h-5 rounded border-2 border-white/20 bg-transparent checked:bg-red-500 checked:border-red-500"
-                />
-                <span className="text-white/80 text-sm">
-                  Ini urgent (user membahayakan keselamatan)
-                </span>
-              </label>
+              {/* Error Message */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl"
+                >
+                  <p className="text-red-400 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    {error}
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Success Message */}
+              {success && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl"
+                >
+                  <p className="text-green-400 text-sm flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Report submitted successfully! Our team will review it.
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Warning about false reports */}
+              <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <p className="text-yellow-400 text-xs">
+                  <AlertTriangle className="w-3 h-3 inline mr-1" />
+                  <strong>Warning:</strong> False reports may result in penalties to your trust score.
+                </p>
+              </div>
 
               {/* Actions */}
               <div className="flex gap-3">
@@ -272,27 +391,28 @@ export const ReportModal = ({ isOpen, onClose, targetUser, onSubmit }: ReportMod
                   variant="secondary"
                   onClick={onClose}
                   fullWidth
+                  disabled={submitting || success}
                 >
-                  Batal
+                  Cancel
                 </GlassButton>
                 <GlassButton
                   variant="primary"
                   onClick={handleSubmit}
-                  disabled={!selectedReason || !details.trim() || submitting}
+                  disabled={!selectedReason || details.trim().length < 20 || submitting || uploading || success}
                   fullWidth
                   className={`${
-                    selectedReason && details.trim()
+                    selectedReason && details.trim().length >= 20 && !submitting
                       ? 'bg-red-500 hover:bg-red-600'
                       : 'opacity-50 cursor-not-allowed'
                   }`}
                 >
-                  {submitting ? 'Mengirim...' : 'Submit Report'}
+                  {submitting ? 'Submitting...' : success ? 'Submitted!' : 'Submit Report'}
                 </GlassButton>
               </div>
 
               {/* Privacy Note */}
               <p className="text-white/40 text-xs text-center mt-4">
-                Report kamu akan di-review tim safety. Identitas pelapor dirahasiakan.
+                Your report will be reviewed by our safety team. Reporter identity is confidential.
               </p>
             </div>
           </motion.div>

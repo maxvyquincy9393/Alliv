@@ -28,6 +28,7 @@ from .routes import verification
 from .routes import email_verification  # NEW: Production email verification
 from .routes import events
 from .routes import projects
+from .routes import reports  # NEW: Report system
 from .routes import health
 from .routes import metrics as metrics_router
 
@@ -202,6 +203,7 @@ app.include_router(uploads.router, tags=["Uploads"])
 app.include_router(verification.router, tags=["Verification"])
 app.include_router(events.router, tags=["Events"])
 app.include_router(projects.router, tags=["Projects"])
+app.include_router(reports.router, tags=["Reports"])  # NEW: Report system
 app.include_router(chat.router, prefix="/chats", tags=["Chat"])
 
 # ✅ Socket.IO WebSocket - ENABLED for real-time chat
