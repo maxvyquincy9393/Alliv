@@ -2,7 +2,9 @@
  * API Service for Alliv Backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { config } from '../config';
+
+const API_BASE_URL = config.apiUrl;
 
 // Types
 interface ApiResponse<T = any> {
@@ -21,10 +23,6 @@ interface RegisterData {
   password: string;
   name: string;
   birthdate: string;
-}
-
-interface OAuthProvider {
-  provider: 'google' | 'github' | 'x';
 }
 
 interface VerificationRequest {
@@ -59,10 +57,19 @@ interface ProfileUpdate {
   };
 }
 
-// Helper function to handle fetch requests
+// Retry configuration interface
+interface RetryConfig {
+  maxRetries?: number;
+  retryDelay?: number;
+  retryableErrors?: number[];
+  exponentialBackoff?: boolean;
+}
+
+// Helper function to handle fetch requests with abort signal support
 async function fetchAPI<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  signal?: AbortSignal
 ): Promise<ApiResponse<T>> {
   const token = localStorage.getItem('access_token');
   
@@ -79,6 +86,7 @@ async function fetchAPI<T = any>(
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      signal, // Add abort signal support
     });
 
     const data = await response.json();
@@ -91,11 +99,101 @@ async function fetchAPI<T = any>(
 
     return { data };
   } catch (error) {
+    // Handle abort errors
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('Request cancelled:', endpoint);
+      return { error: 'Request cancelled' };
+    }
+    
     console.error('API Error:', error);
     return {
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
+}
+
+// Enhanced fetch with retry logic
+async function fetchWithRetry<T = any>(
+  endpoint: string,
+  options: RequestInit = {},
+  config: RetryConfig = {},
+  signal?: AbortSignal
+): Promise<ApiResponse<T>> {
+  const {
+    maxRetries = 3,
+    retryDelay = 1000,
+    retryableErrors = [408, 429, 500, 502, 503, 504],
+    exponentialBackoff = true
+  } = config;
+
+  let lastError: string | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Check if request was aborted before making attempt
+    if (signal?.aborted) {
+      return { error: 'Request cancelled' };
+    }
+
+    try {
+      const response = await fetchAPI<T>(endpoint, options, signal);
+      
+      // Success - return immediately
+      if (!response.error) return response;
+      
+      // Check if cancelled
+      if (response.error === 'Request cancelled') {
+        return response;
+      }
+      
+      // Check if error is retryable based on status code
+      const statusMatch = response.error.match(/\b(\d{3})\b/);
+      const status = statusMatch ? parseInt(statusMatch[1]) : 0;
+      
+      if (!retryableErrors.includes(status) || attempt === maxRetries) {
+        return response; // Don't retry or max retries reached
+      }
+      
+      lastError = response.error;
+      
+      // Wait before retry with exponential backoff
+      const delay = exponentialBackoff 
+        ? retryDelay * Math.pow(2, attempt)
+        : retryDelay;
+      
+      console.log(`Retrying ${endpoint} (attempt ${attempt + 1}/${maxRetries}) after ${delay}ms...`);
+      
+      // Use Promise.race to handle abort during delay
+      await Promise.race([
+        new Promise(resolve => setTimeout(resolve, delay)),
+        new Promise((_, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('Aborted during retry delay')));
+        })
+      ]).catch(() => {});
+      
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Aborted during retry delay') {
+        return { error: 'Request cancelled' };
+      }
+      
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (attempt === maxRetries) {
+        return {
+          error: lastError || 'Request failed after retries'
+        };
+      }
+      
+      // Wait before retry
+      const delay = exponentialBackoff 
+        ? retryDelay * Math.pow(2, attempt)
+        : retryDelay;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return {
+    error: lastError || 'Request failed after retries'
+  };
 }
 
 // Auth API
@@ -388,7 +486,7 @@ export const discoveryAPI = {
     vibe?: string;
     limit?: number;
     cursor?: string;
-  }) => {
+  }, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -396,7 +494,16 @@ export const discoveryAPI = {
       });
     }
 
-    return fetchAPI(`/discover/online?${params.toString()}`);
+    return fetchWithRetry(
+      `/discover/online?${params.toString()}`,
+      {},
+      {
+        maxRetries: 2,
+        retryDelay: 500,
+        exponentialBackoff: true
+      },
+      signal
+    );
   },
 
   /**
@@ -411,7 +518,7 @@ export const discoveryAPI = {
     interests?: string;
     limit?: number;
     cursor?: string;
-  }) => {
+  }, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -419,11 +526,20 @@ export const discoveryAPI = {
       });
     }
 
-    return fetchAPI(`/discover/nearby?${params.toString()}`);
+    return fetchWithRetry(
+      `/discover/nearby?${params.toString()}`,
+      {},
+      {
+        maxRetries: 2,
+        retryDelay: 500,
+        exponentialBackoff: true
+      },
+      signal
+    );
   },
 };
 
-// Swipes & Matches API
+// Match API
 export const matchAPI = {
   /**
    * Swipe action

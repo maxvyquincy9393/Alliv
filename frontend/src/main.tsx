@@ -4,6 +4,9 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import './index.css';
 
+// Validate environment configuration before app starts
+import { config } from './config';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>
