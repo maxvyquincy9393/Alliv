@@ -16,9 +16,10 @@ export const CategoryCard = ({ name, thumbnail, selected = false, onClick }: Cat
       className={`
         relative overflow-hidden rounded-2xl
         transition-all duration-300
-        ${selected 
-          ? 'ring-2 ring-accent-blue shadow-glow-lg' 
-          : 'ring-1 ring-white/10 hover:ring-white/20'
+        ${
+          selected
+            ? 'shadow-[0_30px_80px_rgba(0,0,0,0.5),0_0_2px_rgba(99,102,241,0.5)_inset]'
+            : 'shadow-[0_12px_35px_rgba(0,0,0,0.35)] hover:shadow-[0_18px_50px_rgba(0,0,0,0.45)]'
         }
       `}
     >

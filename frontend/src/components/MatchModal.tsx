@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { User } from '../types/user';
 
@@ -10,7 +11,47 @@ interface MatchModalProps {
 export const MatchModal = ({ user, onClose, onSendMessage }: MatchModalProps) => {
   // Return null if no user provided
   if (!user) return null;
-  
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector);
+        if (focusable.length === 0) {
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      }
+    };
+
+    dialogRef.current?.focus();
+    document.addEventListener('keydown', handleKey);
+
+    return () => {
+      previous?.focus();
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [onClose]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -20,6 +61,10 @@ export const MatchModal = ({ user, onClose, onSendMessage }: MatchModalProps) =>
       onClick={onClose}
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}

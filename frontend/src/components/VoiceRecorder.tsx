@@ -156,7 +156,7 @@ export const VoiceRecorder = ({ onSend, onCancel }: VoiceRecorderProps) => {
           initial={{ width: 48, opacity: 0 }}
           animate={{ width: 'auto', opacity: 1 }}
           exit={{ width: 48, opacity: 0 }}
-          className="flex items-center gap-3 bg-dark-surface/80 backdrop-blur-sm rounded-full px-4 py-2 border border-white/10"
+          className="flex items-center gap-3 bg-[rgb(var(--color-bg-soft)/0.8)] backdrop-blur-sm rounded-full px-4 py-2 border border-white/10"
         >
           {/* Cancel Button */}
           <button

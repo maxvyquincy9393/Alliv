@@ -2,8 +2,15 @@ import { useCallback } from 'react';
 import Particles from '@tsparticles/react';
 import { loadSlim } from '@tsparticles/slim';
 import type { Engine } from '@tsparticles/engine';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export const ParticleBackground = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return null;
+  }
+
   const particlesInit = useCallback(async (engine: Engine) => {
     await loadSlim(engine);
   }, []);

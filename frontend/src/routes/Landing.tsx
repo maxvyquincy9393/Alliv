@@ -1,64 +1,56 @@
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { LandingNavbar } from '../components/LandingNavbar';
+import { AnimatedBackground } from '../components/AnimatedBackground';
+import { Heart, ShieldCheck, Sparkles, Users, Zap, Lock, Globe } from 'lucide-react';
+import { useRef } from 'react';
 
-const heroStats = [
-  { label: 'Active Collaborators', value: '1.2k+' },
-  { label: 'Avg. Match Time', value: '< 5 min' },
-  { label: 'Projects Launched', value: '280+' },
-];
-
-const queuePeek = [
-  { name: 'Sarah Chen', craft: 'Frontend Dev · React/TypeScript', slot: 'Available now' },
-  { name: 'Ahmad Rizki', craft: 'UI/UX Designer · Figma Pro', slot: 'Evening slot' },
-];
-
-const pillars = [
+const featureCards = [
   {
-    title: 'Smart Matching',
-    copy: 'AI-powered algorithm matches you by skills, goals, and availability for perfect collaboration.',
+    icon: Sparkles,
+    title: 'Curated matches',
+    body: 'AI + human review keeps every collaborator relevant so you swipe with purpose.',
   },
+  { icon: Users, title: 'Real profiles', body: 'Stacks, availability, and proof of work appear up front.' },
   {
-    title: 'Rich Profiles',
-    copy: 'Portfolio, tech stack, past projects, and work style—all the info you need for quick decisions.',
-  },
-  {
-    title: 'Real-time Chat',
-    copy: 'Responsive messaging with file sharing, code snippets, and integrated project tracking.',
+    icon: ShieldCheck,
+    title: 'Safety built-in',
+    body: 'Identity checks, audit trails, and rate limits protect every conversation.',
   },
 ];
 
-const steps = [
-  {
-    title: 'Build Your Profile',
-    copy: 'Showcase your skills, expertise, portfolio, and project goals. Let our AI understand who matches with you.',
-  },
-  {
-    title: 'Discover & Match',
-    copy: 'Swipe to find potential collaborators. Like if interested, skip if not—simple and efficient.',
-  },
-  {
-    title: 'Collaborate & Ship',
-    copy: 'Chat directly, brainstorm ideas, share resources, and start building your dream project with the right team.',
-  },
-];
-
-const trustCards = [
-  { title: 'Verified Profiles', copy: 'Every user is verified to ensure credibility and professionalism.' },
-  { title: 'Secure Communication', copy: 'End-to-end encryption for all conversations and file sharing.' },
-  { title: 'Rating System', copy: 'Reviews and ratings from previous collaborations for full transparency.' },
-  { title: 'Smart Moderation', copy: 'AI moderation keeps the collaboration environment professional and safe.' },
+const stats = [
+  { label: 'Active collaborators', value: '18k+' },
+  { label: 'Projects shipped', value: '3.4k' },
+  { label: 'Avg. reply time', value: '3m 18s' },
 ];
 
 export const Landing = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"]
+  });
+  
+  const backgroundOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [1, 0.5, 0.3]);
+
   return (
-    <div className="relative min-h-screen bg-[#04040a] text-white">
+    <div ref={containerRef} className="relative min-h-screen bg-[#0A0F1C] text-white overflow-hidden">
+      <AnimatedBackground />
+      
+      <motion.div 
+        className="pointer-events-none fixed inset-0"
+        style={{ opacity: backgroundOpacity }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0A0F1C]/80 via-[#0A0F1C]/60 to-[#0A0F1C]/90" />
+      </motion.div>
+
       <LandingNavbar />
-      <main className="space-y-10 pb-10 pt-20 md:space-y-14 md:pb-14 md:pt-24">
+      <main className="relative z-10 space-y-24 pb-20 pt-28">
         <Hero />
-        <Pillars />
-        <Steps />
-        <Trust />
+        <SecurityFeatures />
+        <FeatureGrid />
+        <CTA />
         <Footer />
       </main>
     </div>
@@ -66,167 +58,188 @@ export const Landing = () => {
 };
 
 const Hero = () => (
-  <section className="shell-content grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8">
-    <div className="space-y-4 md:space-y-5">
-      <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
-        Alliv · Beta Launch
-      </span>
-      <h1 className="text-4xl font-semibold leading-tight sm:text-5xl md:text-[3.4rem] md:leading-[1.05]">
-        Find the best collaborators for your next project.
-      </h1>
-      <p className="text-lg text-white/70">
-        Alliv connects developers, designers, and creators to build something amazing together. 
-        Smart matching, real-time collaboration, zero hassle.
-      </p>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          to="/register"
-          className="inline-flex items-center justify-center rounded-full bg-white/90 px-8 py-3 text-base font-semibold text-black transition-all hover:bg-white hover:-translate-y-0.5"
-        >
-          Get Started
-        </Link>
-        <Link
-          to="/login"
-          className="inline-flex items-center justify-center rounded-full border border-white/20 px-8 py-3 text-base font-semibold text-white/75 hover:text-white hover:border-white/40"
-        >
-          Sign In
-        </Link>
+  <section className="shell-content">
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, ease: "easeOut" }}
+      className="relative overflow-hidden rounded-[40px] bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-transparent px-8 py-16 shadow-[0_30px_120px_rgba(53,245,255,0.15)] backdrop-blur-2xl border border-white/10"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(93,110,255,0.35),transparent_60%)] opacity-80" />
+      <div className="relative space-y-8 text-center md:text-left">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+          <Sparkles className="h-4 w-4" />
+          Swipe smarter
+        </div>
+        <h1 className="text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
+          Swipe through verified collaborators and launch faster.
+        </h1>
+        <p className="mx-auto max-w-2xl text-base text-white/70 md:mx-0 md:text-lg">
+          Alliv matches founders, designers, and engineers using live availability, real work samples,
+          and transparent intent. No fluff, just people ready to build.
+        </p>
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-start">
+          <Link
+            to="/register"
+            className="inline-flex items-center justify-center rounded-full bg-white px-7 py-3 text-base font-semibold text-black shadow-[0_20px_45px_rgba(0,0,0,0.35)]"
+          >
+            Get started
+          </Link>
+          <Link to="/discover" className="text-white/70 hover:text-white">
+            Browse the queue
+          </Link>
+        </div>
+        <div className="grid gap-4 pt-6 text-center sm:grid-cols-3 sm:text-left">
+          {stats.map((stat) => (
+            <div key={stat.label} className="rounded-2xl bg-white/5 px-4 py-3 text-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.3)] backdrop-blur">
+              <p className="text-2xl font-semibold">{stat.value}</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/50">{stat.label}</p>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {heroStats.map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5">
-            <p className="text-2xl font-semibold text-white">{stat.value}</p>
-            <p className="text-xs uppercase tracking-[0.35em] text-white/55">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-    <HeroCard />
+    </motion.div>
   </section>
 );
 
-const HeroCard = () => (
-  <div className="flex h-full flex-col rounded-[28px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.6)] md:p-6">
-    <div className="flex items-center justify-between text-xs text-white/60">
-      <span>Active collaborators</span>
-      <span className="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-green-400">
-        Live
-      </span>
-    </div>
-    <div className="mt-4 flex-1 space-y-3">
-      {queuePeek.map((match) => (
-        <div
-          key={match.name}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 transition-all hover:border-white/20 hover:bg-black/30"
+const SecurityFeatures = () => (
+  <section className="shell-content space-y-10">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.8 }}
+      className="text-center space-y-3"
+    >
+      <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-emerald-400 border border-emerald-500/30">
+        <Lock className="h-4 w-4" />
+        Enterprise Security
+      </div>
+      <h2 className="text-3xl font-bold sm:text-4xl bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+        Bank-Level Security & Privacy
+      </h2>
+      <p className="text-white/60 max-w-2xl mx-auto">
+        Your data is protected with military-grade encryption and advanced security protocols
+      </p>
+    </motion.div>
+    
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {[
+        {
+          icon: Lock,
+          title: "End-to-End Encryption",
+          description: "AES-256 encryption for all messages and data",
+          color: "from-emerald-500 to-green-500"
+        },
+        {
+          icon: ShieldCheck,
+          title: "2FA Authentication",
+          description: "Multi-factor authentication for account access",
+          color: "from-blue-500 to-cyan-500"
+        },
+        {
+          icon: Zap,
+          title: "DDoS Protection",
+          description: "CloudFlare protection against attacks",
+          color: "from-purple-500 to-pink-500"
+        },
+        {
+          icon: Globe,
+          title: "GDPR Compliant",
+          description: "Full compliance with data protection laws",
+          color: "from-orange-500 to-yellow-500"
+        }
+      ].map((feature, index) => (
+        <motion.div
+          key={feature.title}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: index * 0.1 }}
+          className="relative group"
         >
-          <div>
-            <p className="font-semibold">{match.name}</p>
-            <p className="text-xs text-white/60">{match.craft}</p>
+          <div className="absolute inset-0 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl blur-xl"
+            style={{
+              background: `linear-gradient(135deg, ${feature.color.replace('from-', '').replace('to-', '')})`
+            }}
+          />
+          <div className="relative rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 p-6 hover:border-white/20 transition-all">
+            <div className={`inline-flex p-3 rounded-xl bg-gradient-to-r ${feature.color} mb-4`}>
+              <feature.icon className="h-6 w-6 text-white" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+            <p className="text-sm text-white/60">{feature.description}</p>
           </div>
-          <p className="text-xs font-medium text-green-400">{match.slot}</p>
+        </motion.div>
+      ))}
+    </div>
+  </section>
+);
+
+const FeatureGrid = () => (
+  <section className="shell-content space-y-10">
+    <div className="space-y-3 text-center">
+      <p className="text-xs uppercase tracking-[0.35em] text-white/50">Why Alivv</p>
+      <h2 className="text-3xl font-semibold sm:text-4xl">Less guesswork, more shipped work.</h2>
+    </div>
+    <div className="grid gap-6 md:grid-cols-3">
+      {featureCards.map(({ icon: Icon, title, body }) => (
+        <div key={title} className="rounded-3xl bg-white/5 p-6 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+          <Icon className="mb-5 h-10 w-10 text-white" />
+          <h3 className="mb-3 text-2xl font-semibold">{title}</h3>
+          <p className="text-white/65">{body}</p>
         </div>
       ))}
     </div>
-    <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm">
-      <p className="font-semibold text-white">Quick tip</p>
-      <p className="mt-1 text-xs text-white/70">Complete your profile & portfolio to get 3x more matches.</p>
-    </div>
-  </div>
-);
-
-const Pillars = () => (
-  <section className="shell-content space-y-5">
-    <div className="text-center">
-      <p className="text-xs uppercase tracking-[0.3em] text-white/50">Why Alliv</p>
-      <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
-        Collaboration platform designed for creators.
-      </h2>
-    </div>
-    <div className="grid gap-4 md:grid-cols-3">
-      {pillars.map((pillar) => (
-        <motion.div
-          key={pillar.title}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.35 }}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/70"
-        >
-          <h3 className="text-lg font-semibold text-white">{pillar.title}</h3>
-          <p className="mt-2">{pillar.copy}</p>
-        </motion.div>
-      ))}
-    </div>
   </section>
 );
 
-const Steps = () => (
-  <section className="shell-content space-y-5" id="learn">
-    <div className="text-center">
-      <p className="text-xs uppercase tracking-[0.3em] text-white/50">How It Works</p>
-      <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">
-        Three steps to start collaborating.
-      </h2>
-    </div>
-    <ol className="grid gap-4 md:grid-cols-3">
-      {steps.map((step, index) => (
-        <motion.li
-          key={step.title}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.35 }}
-          className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/70"
+const CTA = () => (
+  <section className="shell-content">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6 }}
+      className="relative overflow-hidden rounded-[48px] bg-[linear-gradient(120deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%)] px-10 py-16 text-center shadow-[0_25px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(255,111,156,0.35),transparent_60%)] opacity-90" />
+      <div className="relative space-y-6">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs uppercase tracking-[0.3em]">
+          <Heart className="h-4 w-4" />
+          Ready when you are
+        </div>
+        <h2 className="text-4xl font-bold sm:text-5xl">Queue up, match fast, build loud.</h2>
+        <p className="mx-auto max-w-2xl text-white/70">
+          Drop into the queue, pick your vibe, and meet collaborators already aligned on tools,
+          timelines, and ambition.
+        </p>
+        <Link
+          to="/register"
+          className="inline-flex items-center justify-center rounded-full bg-white px-8 py-4 text-base font-semibold text-black"
         >
-          <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-white/50">
-            <span>Step {index + 1}</span>
-            <span>Alliv</span>
-          </div>
-          <h3 className="mt-3 text-lg font-semibold text-white">{step.title}</h3>
-          <p className="mt-2">{step.copy}</p>
-        </motion.li>
-      ))}
-    </ol>
-  </section>
-);
-
-const Trust = () => (
-  <section className="shell-content space-y-5" id="trust">
-    <div className="text-center">
-      <p className="text-xs uppercase tracking-[0.3em] text-white/50">Security & Trust</p>
-      <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">Safe and trusted collaboration.</h2>
-    </div>
-    <div className="grid gap-4 md:grid-cols-2">
-      {trustCards.map((card) => (
-        <motion.div
-          key={card.title}
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.35 }}
-          className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/70"
-        >
-          <h3 className="text-lg font-semibold text-white">{card.title}</h3>
-          <p className="mt-2">{card.copy}</p>
-        </motion.div>
-      ))}
-    </div>
+          Claim my spot
+        </Link>
+      </div>
+    </motion.div>
   </section>
 );
 
 const Footer = () => (
-  <footer className="shell-content border-t border-white/10 pt-10 text-center text-xs text-white/60">
-    <p>&copy; {new Date().getFullYear()} Alliv. Built for limitless collaboration.</p>
-    <div className="mt-4 flex justify-center gap-6">
-      <a href="#" className="transition-colors hover:text-white">Privacy Policy</a>
-      <a href="#" className="transition-colors hover:text-white">Terms of Service</a>
-      <a href="#" className="transition-colors hover:text-white">Support</a>
-      <a href="#" className="transition-colors hover:text-white">Contact</a>
-    </div>
-    <div className="mt-6 flex justify-center gap-4 text-sm">
-      <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-        Made with love in Indonesia
-      </span>
+  <footer className="shell-content py-12 text-center text-sm text-white/60">
+    <p>&copy; {new Date().getFullYear()} Alivv. Built for fearless collaborators.</p>
+    <div className="mt-4 flex flex-wrap justify-center gap-6">
+      <a href="#" className="hover:text-white">
+        Privacy
+      </a>
+      <a href="#" className="hover:text-white">
+        Terms
+      </a>
+      <a href="#" className="hover:text-white">
+        Support
+      </a>
     </div>
   </footer>
 );
+
+export default Landing;

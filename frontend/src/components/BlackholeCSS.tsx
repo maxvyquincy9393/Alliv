@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export const BlackholeCSS = () => {
+  const isMobile = useIsMobile();
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     setPrefersReducedMotion(mediaQuery.matches);
     
@@ -13,7 +19,11 @@ export const BlackholeCSS = () => {
     
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">

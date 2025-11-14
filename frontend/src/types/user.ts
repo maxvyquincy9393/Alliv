@@ -4,9 +4,12 @@ export interface User {
   age: number;
   bio?: string;
   avatar: string;
+  photos?: string[];
   skills: string[];
   badges?: string[];
   interests?: string[];
+  role?: string;
+  company?: string;
   location?: string | {
     lat: number;
     lon: number;
@@ -28,6 +31,17 @@ export interface User {
   distance?: number;
   compatibility?: number;
   matchScore?: number;
+  responseRate?: string;
+  availability?: string;
+  projectsCompleted?: number;
+  quickResponder?: boolean;
+  unreadMessages?: number;
+  pendingResponses?: number;
+  newProfiles?: number;
+  notifications?: {
+    chat?: number;
+    matches?: number;
+  };
   email?: string;
   phone?: string;
 }

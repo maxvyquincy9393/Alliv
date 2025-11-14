@@ -1,11 +1,17 @@
 import { useEffect, useRef } from 'react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export const BlackholeSingularity = () => {
+  const isMobile = useIsMobile();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationIdRef = useRef<number>(0);
   const rotationRef = useRef(0);
 
   useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -160,7 +166,11 @@ export const BlackholeSingularity = () => {
       window.removeEventListener('resize', resizeCanvas);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) {
+    return null;
+  }
 
   return (
     <canvas

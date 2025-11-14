@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, Search } from 'lucide-react';
-import { Layout } from '../components/Layout';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { MatchModal } from '../components/MatchModal';
 import MapsView from '../components/MapsView';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../hooks/useAuth';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 import { discoveryAPI } from '../services/api';
 import type { User as ProfileUser } from '../types/user';
 
@@ -21,6 +22,7 @@ export const Discover = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { isMobile } = useBreakpoint();
   const initialRadius = Number(searchParams.get('radius')) || 10;
 
   const [users, setUsers] = useState<ExtendedUser[]>([]);
@@ -115,6 +117,12 @@ export const Discover = () => {
     setSearchParams(params);
   }, [viewMode, radius, setSearchParams]);
 
+  useEffect(() => {
+    if (isMobile && viewMode === 'map') {
+      setViewMode('cards');
+    }
+  }, [isMobile, viewMode]);
+
   const filteredUsers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return users.filter((user) => {
@@ -177,7 +185,7 @@ export const Discover = () => {
   };
 
   return (
-    <Layout>
+    <FullScreenLayout>
       <div className="shell-content space-y-5 pb-12">
         <section className="panel space-y-3 p-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -192,10 +200,16 @@ export const Discover = () => {
               {(['cards', 'map'] as const).map((option) => (
                 <button
                   key={option}
-                  onClick={() => setViewMode(option)}
-                  className={`rounded-full border px-4 py-2 text-sm ${
+                  type="button"
+                  disabled={isMobile && option === 'map'}
+                  onClick={() => {
+                    if (isMobile && option === 'map') return;
+                    setViewMode(option);
+                  }}
+                  title={isMobile && option === 'map' ? 'Map view works best on larger screens' : undefined}
+                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${
                     viewMode === option ? 'bg-white text-black' : 'border-white/20 text-white/70'
-                  }`}
+                  } ${isMobile && option === 'map' ? 'cursor-not-allowed opacity-50' : ''}`}
                 >
                   {option === 'cards' ? 'Card view' : 'Map view'}
                 </button>
@@ -208,8 +222,8 @@ export const Discover = () => {
               <button
                 key={option}
                 onClick={() => setMode(option)}
-                className={`rounded-full px-4 py-2 text-sm ${
-                  mode === option ? 'bg-white text-black' : 'border border-white/20 text-white/70'
+                className={`rounded-full px-4 py-2 text-sm transition-all ${
+                  mode === option ? 'bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.3)]' : 'bg-white/8 text-white/70 hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)]'
                 }`}
               >
                 {option === 'online' ? 'Global online' : 'Nearby radius'}
@@ -249,17 +263,17 @@ export const Discover = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, skill, or city"
-              className="w-full rounded-2xl border border-white/15 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/50 focus:border-white/40 focus:outline-none"
+              className="w-full rounded-2xl bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/50 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.25)] focus:shadow-[inset_0_1px_2px_rgba(255,255,255,0.08),0_6px_18px_rgba(0,0,0,0.35)] focus:outline-none transition-all"
             />
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-sm text-white/70">
-            <div className="rounded-2xl border border-white/10 px-4 py-3">
+            <div className="rounded-2xl bg-white/5 px-4 py-3 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.25)]">
               <p className="text-xs uppercase tracking-[0.3em] text-white/40">Results</p>
               <p className="text-2xl font-semibold text-white">{filteredUsers.length}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 px-4 py-3">
+            <div className="rounded-2xl bg-white/5 px-4 py-3 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.25)]">
               <p className="text-xs uppercase tracking-[0.3em] text-white/40">Online now</p>
               <p className="text-2xl font-semibold text-white">{onlineCount}</p>
             </div>
@@ -275,7 +289,7 @@ export const Discover = () => {
           ) : error ? (
             <div className="p-6 text-center text-sm text-red-200">{error}</div>
           ) : viewMode === 'map' ? (
-            <div className="h-[460px]">
+            <div className={isMobile ? 'h-[340px]' : 'h-[460px]'}>
               <MapsView
                 users={mapFriendlyUsers}
                 center={mapCenter}
@@ -294,7 +308,7 @@ export const Discover = () => {
                   setSearchQuery('');
                   setOnlineOnly(false);
                 }}
-                className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 hover:text-white"
+                className="rounded-full bg-white/8 px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/12 shadow-[0_4px_12px_rgba(0,0,0,0.25)] transition-all"
               >
                 Clear filters
               </button>
@@ -324,7 +338,7 @@ export const Discover = () => {
           onSendMessage={() => navigate('/chat')}
         />
       )}
-    </Layout>
+    </FullScreenLayout>
   );
 };
 
@@ -346,7 +360,7 @@ const DiscoverCard = ({ user, onSave, onSkip }: DiscoverCardProps) => {
         <img
           src={user.avatar}
           alt={user.name}
-          className="h-12 w-12 rounded-full border border-white/10 object-cover"
+          className="h-12 w-12 rounded-full object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
         />
         <div className="flex-1">
           <p className="font-semibold text-white">{user.name}</p>
@@ -355,13 +369,13 @@ const DiscoverCard = ({ user, onSave, onSkip }: DiscoverCardProps) => {
           </p>
         </div>
         {user.isOnline && (
-          <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white">Online</span>
+          <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white shadow-[0_2px_8px_rgba(0,0,0,0.25)]">Online</span>
         )}
       </div>
       <p className="text-sm text-white/70 line-clamp-2">{user.bio}</p>
       <div className="flex flex-wrap gap-2 text-xs text-white/70">
         {(user.skills || []).slice(0, 4).map((skill) => (
-          <span key={skill} className="rounded-full border border-white/10 px-3 py-1">
+          <span key={skill} className="rounded-full bg-white/8 px-3 py-1 shadow-[0_2px_6px_rgba(0,0,0,0.2)]">
             {skill}
           </span>
         ))}
@@ -369,13 +383,13 @@ const DiscoverCard = ({ user, onSave, onSkip }: DiscoverCardProps) => {
       <div className="flex gap-3 pt-2 text-sm">
         <button
           onClick={onSkip}
-          className="flex-1 rounded-full border border-white/15 py-2 text-white/70 hover:text-white"
+          className="flex-1 rounded-full bg-white/8 py-2 text-white/70 hover:text-white hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition-all"
         >
           Skip
         </button>
         <button
           onClick={onSave}
-          className="flex-1 rounded-full bg-white py-2 font-medium text-black transition-transform hover:-translate-y-0.5"
+          className="flex-1 rounded-full bg-white py-2 font-medium text-black shadow-[0_4px_12px_rgba(255,255,255,0.3)] transition-transform hover:-translate-y-0.5"
         >
           Save
         </button>

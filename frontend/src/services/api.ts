@@ -72,6 +72,7 @@ async function fetchAPI<T = any>(
   signal?: AbortSignal
 ): Promise<ApiResponse<T>> {
   const token = localStorage.getItem('access_token');
+  const csrfToken = localStorage.getItem('csrf_token');
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -82,11 +83,16 @@ async function fetchAPI<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
       signal, // Add abort signal support
+      credentials: 'include',
     });
 
     const data = await response.json();

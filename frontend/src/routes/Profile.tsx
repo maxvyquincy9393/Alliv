@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Layout } from '../components/Layout';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 
 interface UserProfile {
   name: string;
@@ -53,17 +53,17 @@ export const Profile = () => {
 
   if (loading) {
     return (
-      <Layout>
+      <FullScreenLayout>
         <div className="shell-content flex min-h-screen items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/20 border-t-white" />
         </div>
-      </Layout>
+      </FullScreenLayout>
     );
   }
 
   if (error || !profile) {
     return (
-      <Layout>
+      <FullScreenLayout>
         <div className="shell-content min-h-screen flex items-center justify-center">
           <div className="panel p-6 text-center space-y-3">
             <p className="text-white font-semibold text-lg">{error || 'Profile not found'}</p>
@@ -75,7 +75,7 @@ export const Profile = () => {
             </button>
           </div>
         </div>
-      </Layout>
+      </FullScreenLayout>
     );
   }
 
@@ -84,7 +84,7 @@ export const Profile = () => {
   const secondaryPhotos = photos.slice(1);
 
   return (
-    <Layout>
+    <FullScreenLayout>
       <div className="shell-content space-y-6 pb-12">
         <section className="panel flex flex-col gap-4 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
@@ -165,7 +165,7 @@ export const Profile = () => {
           ) : null}
         </section>
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };
 

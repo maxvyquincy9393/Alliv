@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 /* Leaflet CSS for map functionality */
 @import 'leaflet/dist/leaflet.css';
@@ -7,34 +7,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens
+   Colors are stored as rgb tuples to align Tailwind + CSS custom properties */
 :root {
-  font-family: 'Plus Jakarta Sans', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  --font-base: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.6;
   font-weight: 400;
   color-scheme: dark;
-  color: rgba(248, 251, 255, 0.96);
-  background-color: #02030a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* UI tokens */
-  --color-bg: #02030a;
-  --color-bg-soft: #050715;
-  --color-bg-subtle: rgba(255, 255, 255, 0.02);
-  --color-card: rgba(7, 10, 20, 0.85);
-  --color-card-strong: rgba(10, 14, 26, 0.95);
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.18);
-  --color-text: rgba(248, 251, 255, 0.96);
-  --color-text-muted: rgba(248, 251, 255, 0.7);
-  --color-highlight: #ff5f8f;
-  --color-accent: #8c6ff7;
-  --color-warm: #ffe066;
-  --grid-stroke: rgba(148, 163, 184, 0.05);
+  --color-bg: 2 3 10;
+  --color-bg-soft: 5 7 21;
+  --color-bg-subtle: 18 20 35;
+  --color-card: 7 10 20;
+  --color-card-strong: 10 14 26;
+
+  --color-border: 255 255 255;
+  --border-alpha-weak: 0.08;
+  --border-alpha-strong: 0.18;
+
+  --color-text: 248 251 255;
+  --color-text-muted: 180 190 210;
+
+  --color-highlight: 255 95 143;
+  --color-accent: 8 189 255;
+  --color-accent-secondary: 99 102 241;
+  --color-warm: 255 224 102;
+
+  --grid-stroke: 148 163 184;
   --blur-strength: 32px;
-  --card-shadow: 0 30px 90px rgba(1, 2, 8, 0.85);
+
+  --shadow-sm: 0 8px 24px rgba(2, 3, 10, 0.45);
+  --shadow-md: 0 16px 40px rgba(2, 3, 10, 0.5);
+  --shadow-lg: 0 30px 70px rgba(1, 2, 8, 0.55);
+  --shadow-glass: 0 24px 50px rgba(0, 0, 0, 0.65);
+  --shadow-glow-blue: 0 0 40px rgba(34, 211, 238, 0.4);
+
   --glow-tinder: #ff5f8f;
   --glow-snap: #ffe066;
   --glow-ig: #35f5ff;
@@ -50,12 +61,13 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family: var(--font-base);
   background: radial-gradient(circle at 12% 20%, rgba(255, 95, 143, 0.18), transparent 55%),
     radial-gradient(circle at 82% 5%, rgba(255, 224, 102, 0.18), transparent 45%),
     radial-gradient(circle at 70% 80%, rgba(53, 245, 255, 0.15), transparent 50%),
-    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-soft) 55%, #03040c 100%);
+    linear-gradient(180deg, rgb(var(--color-bg)) 0%, rgb(var(--color-bg-soft)) 55%, #03040c 100%);
   background-attachment: fixed;
-  color: var(--color-text);
+  color: rgb(var(--color-text));
   position: relative;
   overflow-x: hidden;
 }
@@ -65,7 +77,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(circle, var(--grid-stroke) 1px, transparent 0);
+  background-image: radial-gradient(circle, rgba(var(--grid-stroke), 0.05) 1px, transparent 0);
   background-size: 90px 90px;
   opacity: 0.18;
   mix-blend-mode: screen;
@@ -103,17 +115,18 @@ body::after {
 }
 
 .panel {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
+  background: rgba(var(--color-card), 0.9);
   border-radius: 1.5rem;
-  box-shadow: var(--card-shadow);
+  box-shadow:
+    0 16px 40px rgba(2, 3, 10, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(var(--blur-strength));
   -webkit-backdrop-filter: blur(var(--blur-strength));
 }
 
 .panel-strong {
-  background: var(--color-card-strong);
-  border-color: var(--color-border-strong);
+  background: rgba(var(--color-card-strong), 0.98);
+  border-color: rgba(var(--color-border), var(--border-alpha-strong));
 }
 
 .subtle-grid {
@@ -156,13 +169,13 @@ body::after {
   font-size: 0.9rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: rgb(var(--color-text-muted));
 }
 
 .section-heading h2 {
   font-size: clamp(2rem, 6vw, 3.5rem);
   font-weight: 700;
-  color: var(--color-text);
+  color: rgb(var(--color-text));
 }
 
 /* Glassmorphism utilities */
@@ -170,12 +183,35 @@ body::after {
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }
 
 .glass-hover:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.12);
+}
+
+.shadow-elevated {
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    inset 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.shadow-floating {
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    inset 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.shadow-card-hover {
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.45),
+    inset 0 0 1px rgba(102, 126, 234, 0.2),
+    0 1px 3px rgba(102, 126, 234, 0.3);
 }
 
 /* Shimmer animation for loading states */
@@ -221,6 +257,23 @@ body::after {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 768px) {
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-strong {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-card {
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+  }
 }
 
 /* Neon glow effects */
@@ -373,14 +426,10 @@ textarea:focus {
   user-select: none;
 }
 
-/* Image lazy loading blur */
+/* Ensure lazy-loaded images appear crisp immediately */
 img[loading="lazy"] {
-  filter: blur(10px);
-  transition: filter 0.3s;
-}
-
-img[loading="lazy"].loaded {
-  filter: blur(0);
+  filter: none;
+  transition: none;
 }
 
 /* Gradient border */
@@ -397,6 +446,7 @@ img[loading="lazy"].loaded {
   padding: 1px;
   background: linear-gradient(135deg, rgba(53, 245, 255, 0.4), rgba(255, 236, 61, 0.3));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
@@ -409,5 +459,87 @@ img[loading="lazy"].loaded {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.mesh-orb {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.25;
+  animation: floatOrb 20s ease-in-out infinite;
+}
+
+.mesh-orb.orb-one {
+  top: -10%;
+  left: -5%;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.6), transparent);
+}
+
+.mesh-orb.orb-two {
+  top: 10%;
+  right: 5%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.5), transparent);
+  animation-delay: 4s;
+}
+
+.mesh-orb.orb-three {
+  bottom: -10%;
+  left: 15%;
+  background: radial-gradient(circle, rgba(255, 110, 199, 0.4), transparent);
+  animation-delay: 8s;
+}
+
+.noise-overlay {
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><filter id="n" x="0" y="0"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="120" height="120" filter="url(%23n)" opacity="0.4"/></svg>');
+  mix-blend-mode: soft-light;
+}
+
+.floating-card {
+  opacity: 0.15;
+  transform: rotate(-6deg);
+}
+
+.stat-card {
+  animation: cardBreath 6s ease-in-out infinite alternate;
+}
+
+.animate-softPulse {
+  animation: softPulse 4s ease-in-out infinite;
+}
+
+@keyframes floatOrb {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -25px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes cardBreath {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes softPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(94, 92, 237, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 142, 199, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(94, 92, 237, 0.6);
   }
 }

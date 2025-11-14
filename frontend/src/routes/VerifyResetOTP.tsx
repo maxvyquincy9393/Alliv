@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { authAPI } from '../services/api';
+import { rateLimit } from '../lib/rateLimiter';
 
 export const VerifyResetOTP = () => {
   const location = useLocation();
@@ -15,6 +16,8 @@ export const VerifyResetOTP = () => {
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const RESEND_INTERVAL_MS = 120000;
+  const RESEND_LIMIT = 3;
 
   // Redirect if no email
   useEffect(() => {
@@ -65,6 +68,14 @@ export const VerifyResetOTP = () => {
   };
 
   const handleResendCode = async () => {
+    if (!canResend) return;
+
+    const { allowed, retryAfter } = rateLimit(`reset-otp-${email}`, RESEND_LIMIT, RESEND_INTERVAL_MS);
+    if (!allowed) {
+      setError(`Please wait ${Math.ceil(retryAfter / 1000)}s before requesting another code.`);
+      return;
+    }
+
     setResending(true);
     setError('');
 

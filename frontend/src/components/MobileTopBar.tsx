@@ -15,7 +15,7 @@ export const MobileTopBar = () => {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-dark-surface/95 backdrop-blur-lg border-b border-white/10">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[rgb(var(--color-bg-soft)/0.95)] backdrop-blur-lg border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/home">
             <motion.div
@@ -46,7 +46,7 @@ export const MobileTopBar = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="md:hidden fixed inset-0 z-40 bg-dark-bg/95 backdrop-blur-lg pt-16"
+          className="md:hidden fixed inset-0 z-40 bg-[rgb(var(--color-bg)/0.95)] backdrop-blur-lg pt-16"
           onClick={() => setMenuOpen(false)}
         >
           <div className="p-6 space-y-4">

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../services/api';
+import { rateLimit } from '../lib/rateLimiter';
 
 export const VerifyEmail = () => {
   const navigate = useNavigate();
@@ -17,6 +18,8 @@ export const VerifyEmail = () => {
   // Get email from navigation state or URL
   const email = location.state?.email || searchParams.get('email') || '';
   const maskedEmail = maskEmail(email);
+  const RESEND_INTERVAL_MS = 120000;
+  const RESEND_LIMIT = 3;
   
   // Refs for input management
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -127,6 +130,16 @@ export const VerifyEmail = () => {
   // Resend verification code
   const handleResendCode = async () => {
     if (!canResend) return;
+
+    const { allowed, retryAfter } = rateLimit(
+      `verify-email-${email}`,
+      RESEND_LIMIT,
+      RESEND_INTERVAL_MS,
+    );
+    if (!allowed) {
+      setError(`Please wait ${Math.ceil(retryAfter / 1000)}s before resending another code.`);
+      return;
+    }
 
     try {
       setCanResend(false);

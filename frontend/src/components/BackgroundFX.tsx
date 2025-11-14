@@ -3,8 +3,15 @@ import { initParticlesEngine, Particles } from '@tsparticles/react';
 import { loadSlim } from '@tsparticles/slim';
 import { useEffect, useState } from 'react';
 import type { Engine } from '@tsparticles/engine';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export const BackgroundFX = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return null;
+  }
+
   const [init, setInit] = useState(false);
 
   useEffect(() => {

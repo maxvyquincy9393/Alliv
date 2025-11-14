@@ -27,6 +27,7 @@ const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
   import.meta.env.VITE_API_URL ||
   'http://localhost:8000';
+const SOCKET_SECURE = SOCKET_URL.startsWith('https://');
 
 type TimeoutHandle = ReturnType<typeof setTimeout> | null;
 
@@ -57,7 +58,9 @@ export const useSocket = (matchId: string | null): UseSocketReturn => {
 
     const newSocket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
+      withCredentials: true,
+      secure: SOCKET_SECURE,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,

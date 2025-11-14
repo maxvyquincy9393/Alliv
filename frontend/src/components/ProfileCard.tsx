@@ -10,13 +10,15 @@ export const ProfileCard = ({ user }: ProfileCardProps) => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-dark-card rounded-2xl overflow-hidden shadow-xl border border-dark-border"
+      className="bg-dark-card rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
     >
       {/* Header Image */}
       <div className="relative h-64">
         <img
           src={user.avatar}
           alt={user.name}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-dark-card to-transparent" />
@@ -71,7 +73,7 @@ export const ProfileCard = ({ user }: ProfileCardProps) => {
             {user.skills.map((skill, index) => (
               <span
                 key={index}
-                className="px-4 py-2 bg-dark-surface rounded-xl text-sm text-white border border-dark-border hover:border-accent-orange transition-colors"
+                className="px-4 py-2 rounded-xl text-sm text-white bg-white/5 shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:bg-white/10 hover:shadow-[0_6px_24px_rgba(102,126,234,0.3)] transition-all"
               >
                 {skill}
               </span>
@@ -89,7 +91,7 @@ export const ProfileCard = ({ user }: ProfileCardProps) => {
               {user.interests.map((interest, index) => (
                 <span
                   key={index}
-                  className="px-4 py-2 bg-gradient-to-r from-accent-orange/20 to-accent-peach/20 rounded-xl text-sm text-accent-peach border border-accent-orange/30"
+                  className="px-4 py-2 rounded-xl text-sm text-accent-peach bg-gradient-to-r from-accent-orange/20 to-accent-peach/15 shadow-[0_3px_12px_rgba(255,95,143,0.35)]"
                 >
                   {interest}
                 </span>

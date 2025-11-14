@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Particle {
   x: number;
@@ -12,12 +13,17 @@ interface Particle {
 }
 
 export const SingularityCanvas = () => {
+  const isMobile = useIsMobile();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationIdRef = useRef<number>(0);
   const particlesRef = useRef<Particle[]>([]);
   const timeRef = useRef(0);
 
   useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -126,7 +132,11 @@ export const SingularityCanvas = () => {
       window.removeEventListener('resize', resizeCanvas);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [isMobile]);
+
+  if (isMobile) {
+    return null;
+  }
 
   return (
     <canvas

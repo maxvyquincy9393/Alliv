@@ -52,7 +52,7 @@ const reportReasons = [
   }
 ];
 
-const CLOUDINARY_UPLOAD_PRESET = 'colabmatch_reports';
+const CLOUDINARY_UPLOAD_PRESET = 'alivv_reports';
 const CLOUDINARY_CLOUD_NAME = 'your_cloud_name'; // TODO: Update with actual cloud name
 
 export const ReportModal = ({ isOpen, onClose, targetUser, context }: ReportModalProps) => {

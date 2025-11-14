@@ -10,6 +10,7 @@ interface EnvConfig {
   socketUrl: string;
   googleMapsApiKey: string;
   sentryDsn?: string;
+  metricsUrl: string;
   nodeEnv: string;
 }
 
@@ -24,6 +25,7 @@ function validateEnv(): EnvConfig {
   
   // Optional variables
   const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+  const metricsUrl = import.meta.env.VITE_METRICS_URL;
   const nodeEnv = import.meta.env.MODE || 'development';
 
   // Validate required variables
@@ -95,6 +97,7 @@ function validateEnv(): EnvConfig {
     socketUrl: socketUrl!,
     googleMapsApiKey: googleMapsApiKey || '',
     sentryDsn,
+    metricsUrl: metricsUrl || `${apiUrl}/metrics/web-vitals`,
     nodeEnv
   };
 }

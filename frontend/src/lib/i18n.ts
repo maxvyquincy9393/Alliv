@@ -1,3 +1,37 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+const resources = {
+  en: {
+    translation: {
+      'landing.hero.headline': 'Swipe right on your next collaborator.',
+      'landing.hero.subcopy':
+        'Alivv matches your brief with verified builders so you can move from spark to ship faster.',
+      'landing.hero.primaryCta': 'Start swiping collaborators',
+      'landing.hero.secondaryCta': 'Have a crew already?',
+      'landing.hero.secondaryCtaAction': 'Log in',
+    },
+  },
+  id: {
+    translation: {
+      'landing.hero.headline': 'Swipe kanan untuk kolaborator berikutnya.',
+      'landing.hero.subcopy':
+        'Alivv membaca kebutuhanmu, memverifikasi talent, dan mengantar kamu langsung ke ruang kerja.',
+      'landing.hero.primaryCta': 'Mulai swipe kolaborator',
+      'landing.hero.secondaryCta': 'Sudah punya kru?',
+      'landing.hero.secondaryCtaAction': 'Masuk sekarang',
+    },
+  },
+};
+
+i18n.use(initReactI18next).init({
+  resources,
+  lng: 'en',
+  fallbackLng: 'en',
+  interpolation: { escapeValue: false },
+});
+
+export default i18n;
 // Multi-language support system
 interface Translations {
   [key: string]: {

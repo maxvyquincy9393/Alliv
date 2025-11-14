@@ -5,6 +5,10 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { queryClient } from './lib/queryClient';
 import './index.css';
+import './lib/i18n';
+import { initMonitoring } from './lib/monitoring';
+
+initMonitoring();
 
 // Validate environment configuration before app starts
 import './config';

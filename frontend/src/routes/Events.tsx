@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ComponentType } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Layout } from '../components/Layout';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { GlassButton } from '../components/GlassButton';
 import { useAuth } from '../hooks/useAuth';
 import { scaleIn } from '../lib/motion';
@@ -124,7 +124,7 @@ export const Events = () => {
   const filteredEvents = events.filter((event) => (filter === 'all' ? true : event.category === filter));
 
   return (
-    <Layout>
+    <FullScreenLayout>
       <div className="shell-content space-y-6 pb-12">
         <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1.5">
@@ -145,10 +145,10 @@ export const Events = () => {
               <button
                 key={cat}
                 onClick={() => setFilter(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                   filter === cat
-                    ? 'bg-white text-black'
-                    : 'border border-white/15 text-white/70 hover:text-white'
+                    ? 'bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.3)]'
+                    : 'bg-white/8 text-white/70 hover:text-white hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)]'
                 }`}
               >
                 {cat === 'all' ? 'All events' : categoryMeta[cat]?.label || cat}
@@ -174,12 +174,12 @@ export const Events = () => {
                 className="panel flex h-full flex-col gap-4 p-5"
               >
                 <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-white/70">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1 text-xs text-white/70 shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
                     <Icon className="w-3.5 h-3.5" />
                     {meta?.label || key}
                   </div>
                   {event.isOnline && (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-accent-blue">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-accent-blue/15 px-3 py-1 text-xs text-accent-blue shadow-[0_2px_8px_rgba(8,189,255,0.25)]">
                       <Wifi className="w-3.5 h-3.5" />
                       Online
                     </span>
@@ -210,7 +210,7 @@ export const Events = () => {
                   <img
                     src={event.organizerAvatar}
                     alt={event.organizerName}
-                    className="w-10 h-10 rounded-full object-cover border border-white/15"
+                    className="w-10 h-10 rounded-full object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                   />
                   <div>
                     <p className="text-sm text-white font-semibold">{event.organizerName}</p>
@@ -220,7 +220,7 @@ export const Events = () => {
 
                 <div className="flex flex-wrap gap-1.5">
                   {event.tags?.map((tag) => (
-                    <span key={tag} className="text-xs rounded-full border border-white/10 px-3 py-1 text-white/70">
+                    <span key={tag} className="text-xs rounded-full bg-white/8 px-3 py-1 text-white/70 shadow-[0_2px_6px_rgba(0,0,0,0.2)]">
                       {tag}
                     </span>
                   ))}
@@ -228,7 +228,7 @@ export const Events = () => {
 
                 <button
                   onClick={() => handleRSVP(event.id)}
-                  className="w-full rounded-2xl border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
+                  className="w-full rounded-2xl bg-white/8 px-4 py-2 text-sm font-medium text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:bg-white/12 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all"
                 >
                   RSVP
                 </button>
@@ -237,6 +237,6 @@ export const Events = () => {
           })}
         </div>
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };

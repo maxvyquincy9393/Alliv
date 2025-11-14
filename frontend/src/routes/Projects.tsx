@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Layout } from '../components/Layout';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { GlassButton } from '../components/GlassButton';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { useAuth } from '../hooks/useAuth';
@@ -106,7 +106,7 @@ export const Projects = () => {
   });
 
   return (
-    <Layout>
+    <FullScreenLayout>
       <div className="shell-content space-y-4 pb-8 md:pb-12">
         <section className="panel p-4 md:p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -138,10 +138,10 @@ export const Projects = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setViewMode('list')}
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-all ${
                 viewMode === 'list'
-                  ? 'bg-white text-black'
-                  : 'border border-white/15 text-white/70 hover:text-white'
+                  ? 'bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.3)]'
+                  : 'bg-white/8 text-white/70 hover:text-white hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)]'
               }`}
             >
               <List className="w-4 h-4" />
@@ -149,10 +149,10 @@ export const Projects = () => {
             </button>
             <button
               onClick={() => setViewMode('kanban')}
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-all ${
                 viewMode === 'kanban'
-                  ? 'bg-white text-black'
-                  : 'border border-white/15 text-white/70 hover:text-white'
+                  ? 'bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.3)]'
+                  : 'bg-white/8 text-white/70 hover:text-white hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)]'
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -177,7 +177,7 @@ export const Projects = () => {
                   <img
                     src={project.owner?.avatar || project.ownerAvatar}
                     alt={project.owner?.name || project.ownerName}
-                    className="w-8 h-8 rounded-full object-cover border border-white/15"
+                    className="w-8 h-8 rounded-full object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                   />
                   <div className="flex-1">
                     <p className="text-sm text-white font-semibold">
@@ -185,7 +185,7 @@ export const Projects = () => {
                     </p>
                     <p className="text-xs text-white/50">{project.createdAt}</p>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-400/15 text-emerald-200">
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-400/15 text-emerald-200 shadow-[0_2px_8px_rgba(16,185,129,0.2)]">
                     {project.status === 'open' ? 'Open' : 'Closed'}
                   </span>
                 </div>
@@ -199,7 +199,7 @@ export const Projects = () => {
                   {project.tags?.map((tag) => (
                     <span
                       key={tag}
-                      className="text-xs rounded-full border border-white/10 px-2 py-0.5 text-white/70"
+                      className="text-xs rounded-full bg-white/8 px-2 py-0.5 text-white/70 shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
                     >
                       {tag}
                     </span>
@@ -215,7 +215,7 @@ export const Projects = () => {
                   </p>
                   <button
                     onClick={() => handleApply(project.id)}
-                    className="w-full rounded-xl border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+                    className="w-full rounded-xl bg-white/8 px-3 py-1.5 text-xs font-medium text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:bg-white/12 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all"
                   >
                     Request intro
                   </button>
@@ -230,6 +230,6 @@ export const Projects = () => {
         )}
 
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };

@@ -1,12 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Heart, Star, X } from 'lucide-react';
-import { Layout } from '../components/Layout';
+import { Heart, MessageCircle, Star, Undo2, X, Sparkles } from 'lucide-react';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { SwipeCard } from '../components/SwipeCard';
 import { MatchModal } from '../components/MatchModal';
 import { useSwipe } from '../hooks/useSwipe';
 import { useAuth } from '../hooks/useAuth';
+import { theme } from '../styles/theme';
 
 export const Home = () => {
   const { isAuthenticated } = useAuth();
@@ -20,7 +21,15 @@ export const Home = () => {
     loadUsers,
     handleSwipe,
     closeMatchModal,
+    swipeHistory,
+    undoLastSwipe,
   } = useSwipe();
+  
+  const [feedback, setFeedback] = useState<{ type: 'pass' | 'like' | 'super'; id: number } | null>(null);
+  const [superLikesUsed, setSuperLikesUsed] = useState(0);
+
+  const totalDailySwipes = 50;
+  const superLikeLimit = 3;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -32,11 +41,25 @@ export const Home = () => {
 
   const currentUser = users[currentIndex];
   const noMoreUsers = currentIndex >= users.length;
+  const swipesRemaining = Math.max(totalDailySwipes - currentIndex, 0);
+  const superLikesRemaining = Math.max(superLikeLimit - superLikesUsed, 0);
 
   const handleSwipeAction = (direction: 'left' | 'right' | 'up') => {
-    if (currentUser) {
-      handleSwipe(direction, currentUser.id);
+    if (!currentUser) return;
+    if (direction === 'up') {
+      setSuperLikesUsed((prev) => Math.min(superLikeLimit, prev + 1));
     }
+    setFeedback({
+      type: direction === 'left' ? 'pass' : direction === 'right' ? 'like' : 'super',
+      id: Date.now(),
+    });
+    handleSwipe(direction, currentUser.id);
+    setTimeout(() => setFeedback(null), 1100);
+  };
+
+  const handleUndo = () => {
+    if (!swipeHistory.length) return;
+    undoLastSwipe();
   };
 
   const handleSendMessage = () => {
@@ -45,91 +68,173 @@ export const Home = () => {
   };
 
   return (
-    <Layout>
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),transparent_55%)]" />
-        <div className="shell-content relative z-10 flex min-h-[calc(100vh-80px)] flex-col items-center justify-center pb-8">
-          <div className="w-full max-w-xl space-y-5">
-            {loading ? (
-              <div className="flex h-[500px] items-center justify-center">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-                  className="h-14 w-14 rounded-full border-4 border-white/10 border-t-white"
-                />
+    <FullScreenLayout>
+      <div className="relative flex flex-1 items-center justify-center px-4 py-8">
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center gap-6"
+          >
+            <div className="relative">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="h-20 w-20 rounded-full"
+                style={{
+                  background: `conic-gradient(from 0deg, transparent 270deg, ${theme.colors.primary.blue} 360deg)`,
+                  WebkitMask: 'radial-gradient(circle, transparent 50%, black 54%)',
+                  mask: 'radial-gradient(circle, transparent 50%, black 54%)'
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="h-8 w-8 text-white/70" />
               </div>
-            ) : noMoreUsers ? (
-              <div className="flex h-[500px] flex-col items-center justify-center gap-4 text-center">
-                <h2 className="text-2xl font-semibold text-white">Queue is clear</h2>
-                <p className="text-sm text-white/65">
-                  We will ping you once new collaborators enter your radius. Tap reload to check again.
-                </p>
-                <button
-                  onClick={loadUsers}
-                  className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-transform hover:-translate-y-0.5"
-                >
-                  Reload queue
-                </button>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-white">Finding matches</p>
+              <p className="text-sm text-white/60">Preparing your personalized feed...</p>
+            </div>
+          </motion.div>
+        ) : noMoreUsers ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex max-w-md flex-col items-center gap-6 text-center"
+          >
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#FFEC3D] to-[#FFD700] rounded-full blur-2xl opacity-30" />
+              <div className="relative rounded-full bg-gradient-to-br from-white/10 to-white/5 p-8 backdrop-blur-xl border border-white/10">
+                <Star className="h-16 w-16" style={{ color: theme.colors.primary.yellow }} />
               </div>
-            ) : (
-              <>
-                <div className="relative h-[500px]">
-                  <AnimatePresence>
-                    {users
-                      .slice(currentIndex, currentIndex + 3)
-                      .reverse()
-                      .map((user, index) => (
-                        <SwipeCard
-                          key={user.id}
-                          user={user}
-                          onSwipe={handleSwipeAction}
-                          style={{
-                            zIndex: 3 - index,
-                            scale: 1 - index * 0.04,
-                            transform: `translateY(${index * 12}px)`,
-                          }}
-                        />
-                      ))}
-                  </AnimatePresence>
-                </div>
-                {currentUser && (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="text-center text-sm text-white/70">
-                      <p className="text-lg font-semibold text-white">{currentUser.name}</p>
-                      <p>
-                        {currentUser.skills?.slice(0, 2).join(', ') ||
-                          currentUser.bio?.slice(0, 64) ||
-                          'No bio yet'}
-                      </p>
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-3xl font-bold text-white">All caught up!</h2>
+              <p className="text-white/60 max-w-sm">
+                You've seen all available profiles. Check back later or adjust your preferences.
+              </p>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={loadUsers}
+              className="px-8 py-4 rounded-full bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] text-black font-bold shadow-lg hover:shadow-xl transition-all"
+              style={{ boxShadow: `0 15px 35px ${theme.colors.primary.blue}40` }}
+            >
+              Refresh Feed
+            </motion.button>
+          </motion.div>
+        ) : (
+          <div className="relative w-full max-w-[420px]">
+            {/* Card Stack */}
+            <div className="relative min-h-[580px]">
+              <AnimatePresence initial={false}>
+                {users
+                  .slice(currentIndex, currentIndex + 3)
+                  .reverse()
+                  .map((userCard, index) => (
+                    <SwipeCard
+                      key={userCard.id}
+                      user={userCard}
+                      onSwipe={handleSwipeAction}
+                      swipesRemaining={swipesRemaining}
+                      totalSwipes={totalDailySwipes}
+                      style={{
+                        zIndex: 3 - index,
+                        scale: 1 - index * 0.04,
+                        top: index * 18,
+                      }}
+                    />
+                  ))}
+              </AnimatePresence>
+
+              {/* Feedback Toast */}
+              <AnimatePresence>
+                {feedback && (
+                  <motion.div
+                    key={feedback.id}
+                    initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.8 }}
+                    className="pointer-events-none absolute left-1/2 top-8 -translate-x-1/2 z-50"
+                  >
+                    <div
+                      className="px-8 py-3 rounded-full text-lg font-bold shadow-2xl"
+                      style={{
+                        background: feedback.type === 'pass'
+                          ? `linear-gradient(135deg, #EF4444 0%, #DC2626 100%)`
+                          : feedback.type === 'like'
+                          ? theme.gradients.button
+                          : `linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`,
+                        color: feedback.type === 'super' ? '#000' : '#fff',
+                        boxShadow: `0 20px 40px ${feedback.type === 'pass' ? '#EF444440' : feedback.type === 'like' ? theme.colors.primary.purple + '40' : theme.colors.primary.yellow + '40'}`
+                      }}
+                    >
+                      {feedback.type === 'pass' ? 'NOPE' : feedback.type === 'like' ? 'LIKE' : 'SUPER LIKE!'}
                     </div>
-                    <div className="flex gap-4">
-                      <button
-                        onClick={() => handleSwipeAction('left')}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:text-white"
-                      >
-                        <X className="h-6 w-6" />
-                      </button>
-                      <button
-                        onClick={() => handleSwipeAction('up')}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:text-white"
-                      >
-                        <Star className="h-6 w-6" />
-                      </button>
-                      <button
-                        onClick={() => handleSwipeAction('right')}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black transition hover:-translate-y-0.5"
-                      >
-                        <Heart className="h-6 w-6" />
-                      </button>
-                    </div>
-                  </div>
+                  </motion.div>
                 )}
-              </>
-            )}
+              </AnimatePresence>
+            </div>
+
+            {/* Bottom Action Buttons */}
+            <div className="mt-6 flex justify-center gap-3">
+              <ActionButton
+                icon={Undo2}
+                onClick={handleUndo}
+                disabled={swipeHistory.length === 0}
+                size="small"
+                gradient="linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)"
+                shadowColor="rgba(255,255,255,0.1)"
+              />
+              <ActionButton
+                icon={X}
+                onClick={() => handleSwipeAction('left')}
+                size="large"
+                gradient={theme.gradients.danger}
+                shadowColor="#EF444440"
+              />
+              <ActionButton
+                icon={Star}
+                onClick={() => handleSwipeAction('up')}
+                disabled={superLikesRemaining === 0}
+                size="medium"
+                gradient={`linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`}
+                shadowColor={theme.colors.primary.yellow + '40'}
+                textColor="#000"
+              />
+              <ActionButton
+                icon={Heart}
+                onClick={() => handleSwipeAction('right')}
+                size="large"
+                gradient={theme.gradients.button}
+                shadowColor={theme.colors.primary.purple + '40'}
+              />
+              <ActionButton
+                icon={MessageCircle}
+                onClick={() => navigate('/chat')}
+                size="small"
+                gradient="linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)"
+                shadowColor="rgba(255,255,255,0.1)"
+              />
+            </div>
+
+            {/* Stats Bar */}
+            <div className="mt-6 flex justify-center gap-4">
+              <div className="flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 backdrop-blur-xl border border-white/10">
+                <Heart size={14} className="text-white/60" />
+                <span className="text-xs text-white/80 font-medium">{swipesRemaining} left</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 backdrop-blur-xl border border-white/10">
+                <Star size={14} style={{ color: theme.colors.primary.yellow }} />
+                <span className="text-xs text-white/80 font-medium">{superLikesRemaining} super</span>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
+      {/* Match Modal */}
       <AnimatePresence>
         {showMatchModal && matchedUser && (
           <MatchModal
@@ -139,6 +244,55 @@ export const Home = () => {
           />
         )}
       </AnimatePresence>
-    </Layout>
+    </FullScreenLayout>
+  );
+};
+
+interface ActionButtonProps {
+  icon: typeof X;
+  onClick: () => void;
+  disabled?: boolean;
+  size?: 'small' | 'medium' | 'large';
+  gradient: string;
+  shadowColor: string;
+  textColor?: string;
+}
+
+const ActionButton = ({ 
+  icon: Icon, 
+  onClick, 
+  disabled = false, 
+  size = 'medium', 
+  gradient,
+  shadowColor,
+  textColor = '#fff'
+}: ActionButtonProps) => {
+  const sizeClasses = {
+    small: 'h-12 w-12',
+    medium: 'h-14 w-14',
+    large: 'h-16 w-16',
+  };
+
+  const iconSizes = {
+    small: 16,
+    medium: 20,
+    large: 22,
+  };
+
+  return (
+    <motion.button
+      whileHover={{ scale: disabled ? 1 : 1.1 }}
+      whileTap={{ scale: disabled ? 1 : 0.9 }}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${sizeClasses[size]} flex items-center justify-center rounded-full backdrop-blur-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-white/10`}
+      style={{
+        background: gradient,
+        boxShadow: `0 15px 35px ${shadowColor}`,
+        color: textColor
+      }}
+    >
+      <Icon size={iconSizes[size]} />
+    </motion.button>
   );
 };
