@@ -1,18 +1,46 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import type { ComponentType } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { GlassButton } from '../components/GlassButton';
 import { useAuth } from '../hooks/useAuth';
-import { fadeInUp, stagger, scaleIn } from '../lib/motion';
+import { scaleIn } from '../lib/motion';
 import type { Event, EventCategory } from '../types/event';
+import {
+  Camera,
+  Music3,
+  Cpu,
+  Users,
+  Sparkles,
+  Palette,
+  Wifi,
+  Calendar,
+  Clock,
+  MapPin,
+} from 'lucide-react';
+
+const categoryMeta: Partial<
+  Record<EventCategory, { label: string; icon: ComponentType<{ className?: string }> }>
+> = {
+  photowalk: { label: 'Photo Walk', icon: Camera },
+  'photography-walk': { label: 'Photo Walk', icon: Camera },
+  jamsession: { label: 'Jam Session', icon: Music3 },
+  'jam-session': { label: 'Jam Session', icon: Music3 },
+  hackathon: { label: 'Hackathon', icon: Cpu },
+  hacknight: { label: 'Hack Night', icon: Cpu },
+  meetup: { label: 'Meetup', icon: Users },
+  networking: { label: 'Networking', icon: Users },
+  workshop: { label: 'Workshop', icon: Palette },
+  'design-sprint': { label: 'Design Sprint', icon: Palette },
+  collaboration: { label: 'Collaboration', icon: Sparkles },
+};
 
 export const Events = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<Event[]>([]);
   const [filter, setFilter] = useState<EventCategory | 'all'>('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -23,12 +51,12 @@ export const Events = () => {
   }, [isAuthenticated, navigate]);
 
   const loadEvents = () => {
-    // Mock events data
     const mockEvents: Event[] = [
       {
         id: '1',
         title: 'Sunday Photo Walk: Old Town',
-        description: 'Join us for a relaxed photo walk through the historic old town. All skill levels welcome!',
+        description:
+          'Join us for a relaxed photo walk through the historic old town. All skill levels welcome!',
         organizerId: 'u1',
         organizerName: 'Lisa Wang',
         organizerAvatar: 'https://i.pravatar.cc/150?img=9',
@@ -47,7 +75,8 @@ export const Events = () => {
       {
         id: '2',
         title: 'Jazz Jam Session',
-        description: 'Bring your instrument and join our weekly jam session. Improvise, collaborate, and have fun!',
+        description:
+          'Bring your instrument and join our weekly jam session. Improvise, collaborate, and have fun!',
         organizerId: 'u2',
         organizerName: 'David Park',
         organizerAvatar: 'https://i.pravatar.cc/150?img=11',
@@ -66,7 +95,8 @@ export const Events = () => {
       {
         id: '3',
         title: '48-Hour Hackathon: AI for Good',
-        description: 'Build AI solutions for social impact. Teams will be formed on day 1. Prizes for top 3 projects!',
+        description:
+          'Build AI solutions for social impact. Teams will be formed on day 1. Prizes for top 3 projects!',
         organizerId: 'u3',
         organizerName: 'Emma Chen',
         organizerAvatar: 'https://i.pravatar.cc/150?img=6',
@@ -91,212 +121,128 @@ export const Events = () => {
     alert('RSVP confirmed! Check your messages for the event group chat.');
   };
 
-  const filteredEvents = events.filter((e) => {
-    if (filter === 'all') return true;
-    return e.category === filter;
-  });
-
-  const categoryIcons: Partial<Record<EventCategory, string>> = {
-    photowalk: '📷',
-    'photography-walk': '📷',
-    jamsession: '🎵',
-    'jam-session': '🎵',
-    hacknight: '💻',
-    hackathon: '💻',
-    meetup: '🤝',
-    workshop: '🎓',
-    'design-sprint': '🎨',
-    networking: '🌐',
-    collaboration: '🤝',
-  };
-
-  const categoryLabels: Partial<Record<EventCategory, string>> = {
-    photowalk: 'Photo Walk',
-    'photography-walk': 'Photo Walk',
-    jamsession: 'Jam Session',
-    'jam-session': 'Jam Session',
-    hacknight: 'Hack Night',
-    hackathon: 'Hackathon',
-    meetup: 'Meetup',
-    workshop: 'Workshop',
-    'design-sprint': 'Design Sprint',
-    networking: 'Networking',
-    collaboration: 'Collaboration',
-  };
+  const filteredEvents = events.filter((event) => (filter === 'all' ? true : event.category === filter));
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto px-4 pt-8 pb-24">
-        <motion.div
-          variants={stagger(0.1)}
-          initial="hidden"
-          animate="show"
-          className="space-y-6"
-        >
-          {/* Header */}
-          <motion.div variants={fadeInUp} className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Events</h1>
-              <p className="text-white/50">Join creative meetups and collaborations</p>
-            </div>
-            <GlassButton variant="primary" onClick={() => navigate('/events/create')}>
-              + Create Event
-            </GlassButton>
-          </motion.div>
+      <div className="shell-content space-y-8 pb-16">
+        <section className="panel p-6 sm:p-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Events</p>
+            <h1 className="text-3xl font-semibold text-white">Meet collaborators in real time.</h1>
+            <p className="text-white/60 text-sm mt-2">
+              Walks, jam sessions, hackathons, and more curated meets for the Alliv community.
+            </p>
+          </div>
+          <GlassButton variant="primary" onClick={() => navigate('/events/create')}>
+            + Create event
+          </GlassButton>
+        </section>
 
-          {/* Category Filter */}
-          <motion.div variants={fadeInUp} className="flex gap-2 overflow-x-auto pb-2">
+        <section className="panel p-4 flex gap-2 overflow-x-auto">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+              filter === 'all' ? 'bg-white text-black' : 'border border-white/15 text-white/70 hover:text-white'
+            }`}
+          >
+            All events
+          </button>
+          {(Object.keys(categoryMeta) as EventCategory[]).map((cat) => (
             <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-xl font-medium whitespace-nowrap transition-all ${
-                filter === 'all'
-                  ? 'glass-strong text-white shadow-glow-blue'
-                  : 'glass text-white/60 hover:text-white'
+              key={cat}
+              onClick={() => setFilter(cat)}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
+                filter === cat
+                  ? 'bg-white text-black'
+                  : 'border border-white/15 text-white/70 hover:text-white'
               }`}
             >
-              All Events
+              {categoryMeta[cat]?.label || cat}
             </button>
-            {(Object.keys(categoryIcons) as EventCategory[]).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                className={`px-4 py-2 rounded-xl font-medium whitespace-nowrap transition-all ${
-                  filter === cat
-                    ? 'glass-strong text-white shadow-glow-blue'
-                    : 'glass text-white/60 hover:text-white'
-                }`}
-              >
-                {categoryIcons[cat]} {categoryLabels[cat]}
-              </button>
-            ))}
-          </motion.div>
+          ))}
+        </section>
 
-          {/* Events Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.map((event, index) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredEvents.map((event, index) => {
+            const key: EventCategory = event.category ?? 'collaboration';
+            const meta = categoryMeta[key];
+            const Icon = meta?.icon || Sparkles;
+
+            return (
               <motion.div
                 key={event.id}
                 variants={scaleIn}
                 custom={index}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className="glass-card rounded-2xl p-6 space-y-4"
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true }}
+                className="panel p-5 space-y-4"
               >
-                {/* Category Badge */}
                 <div className="flex items-center justify-between">
-                  {event.category && (
-                    <span className="px-3 py-1 glass rounded-full text-xs font-medium text-white/70">
-                      {categoryIcons[event.category] || '📌'} {categoryLabels[event.category] || event.category}
-                    </span>
-                  )}
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-white/70">
+                    <Icon className="w-3.5 h-3.5" />
+                    {meta?.label || key}
+                  </div>
                   {event.isOnline && (
-                    <span className="px-3 py-1 glass rounded-full text-xs text-accent-blue">
-                      🌐 Online
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-accent-blue">
+                      <Wifi className="w-3.5 h-3.5" />
+                      Online
                     </span>
                   )}
                 </div>
 
-                {/* Title & Organizer */}
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-2">{event.title}</h3>
+                  <h3 className="text-xl font-semibold text-white">{event.title}</h3>
+                  <p className="text-sm text-white/60 line-clamp-3">{event.description}</p>
+                </div>
+
+                <div className="space-y-2 text-sm text-white/70">
                   <div className="flex items-center gap-2">
-                    <img
-                      src={event.organizerAvatar}
-                      alt={event.organizerName}
-                      className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10"
-                    />
-                    <span className="text-xs text-white/50">by {event.organizerName}</span>
+                    <Calendar className="w-4 h-4 text-white/40" />
+                    {new Date(event.startsAt).toLocaleDateString()}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-white/40" />
+                    {new Date(event.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-white/40" />
+                    {event.venueCity}
                   </div>
                 </div>
 
-                {/* Description */}
-                <p className="text-sm text-white/60 line-clamp-3">{event.description}</p>
-
-                {/* Date & Location */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-white/40">📅</span>
-                    <span className="text-white/70">
-                      {new Date(event.startsAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-white/40">📍</span>
-                    <span className="text-white/70">{event.venueCity}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-white/40">👥</span>
-                    <span className="text-white/70">
-                      {event.attendees.length}{event.maxAttendees ? `/${event.maxAttendees}` : ''} attending
-                    </span>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={event.organizerAvatar}
+                    alt={event.organizerName}
+                    className="w-10 h-10 rounded-full object-cover border border-white/15"
+                  />
+                  <div>
+                    <p className="text-sm text-white font-semibold">{event.organizerName}</p>
+                    <p className="text-xs text-white/50">Organizer</p>
                   </div>
                 </div>
 
-                {/* RSVP Button */}
-                <GlassButton
-                  variant="primary"
-                  fullWidth
+                <div className="flex flex-wrap gap-2">
+                  {event.tags?.map((tag) => (
+                    <span key={tag} className="text-xs rounded-full border border-white/10 px-3 py-1 text-white/70">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <button
                   onClick={() => handleRSVP(event.id)}
-                  disabled={event.maxAttendees ? event.attendees.length >= event.maxAttendees : false}
+                  className="w-full rounded-2xl border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
                 >
-                  {event.maxAttendees && event.attendees.length >= event.maxAttendees ? 'Event Full' : 'RSVP'}
-                </GlassButton>
+                  RSVP
+                </button>
               </motion.div>
-            ))}
-          </div>
-
-          {/* Empty State */}
-          {filteredEvents.length === 0 && (
-            <motion.div
-              variants={fadeInUp}
-              className="text-center py-20 glass-card rounded-2xl"
-            >
-              <div className="text-6xl mb-4">📅</div>
-              <h3 className="text-xl font-semibold text-white mb-2">No events found</h3>
-              <p className="text-white/40 mb-6">Create the first event in this category!</p>
-              <GlassButton variant="primary" onClick={() => setShowCreateModal(true)}>
-                Create Event
-              </GlassButton>
-            </motion.div>
-          )}
-        </motion.div>
+            );
+          })}
+        </div>
       </div>
-
-      {/* Create Modal (placeholder) */}
-      <AnimatePresence>
-        {showCreateModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={() => setShowCreateModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-card rounded-2xl p-8 max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-2xl font-bold text-white mb-4">Create Event</h2>
-              <p className="text-white/60 mb-6">Event creation form would go here...</p>
-              <div className="flex gap-3">
-                <GlassButton variant="ghost" fullWidth onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </GlassButton>
-                <GlassButton variant="primary" fullWidth>
-                  Create
-                </GlassButton>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </Layout>
   );
 };

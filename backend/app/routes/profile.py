@@ -4,7 +4,7 @@ Handles: Get/Update Profile, Photos, Portfolio
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 from pymongo.errors import PyMongoError
@@ -18,6 +18,30 @@ from ..auth import get_current_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Profile"])
+
+
+def is_profile_complete(profile: Dict[str, Any]) -> bool:
+    """Determine if a profile has enough data to be considered complete."""
+    if not profile:
+        return False
+
+    # Basic text fields
+    required_text_fields = ["name", "bio"]
+    for field in required_text_fields:
+        value = profile.get(field)
+        if not value or not str(value).strip():
+            return False
+
+    # Age must exist and be >= 18
+    age = profile.get("age")
+    if not isinstance(age, int) or age < 18:
+        return False
+
+    has_skills = bool(profile.get("skills"))
+    has_interests = bool(profile.get("interests"))
+    has_photos = bool(profile.get("photos"))
+
+    return has_skills and has_interests and has_photos
 
 
 # ===== MODELS =====
@@ -149,6 +173,8 @@ async def update_current_profile(
     user_id = str(current_user["_id"])
     
     try:
+        existing_profile = await get_db().profiles.find_one({"userId": user_id}) or {}
+
         # Build update document with sanitized data
         update_data = {}
         if data.name:
@@ -191,6 +217,12 @@ async def update_current_profile(
             update_data["visibility"] = data.visibility
         
         update_data["updatedAt"] = datetime.utcnow()
+
+        # Determine if this update satisfies completion requirements
+        merged_profile = {**existing_profile, **update_data}
+        if is_profile_complete(merged_profile):
+            update_data["profileComplete"] = True
+            update_data["completionScore"] = 100
         
         # [OK] Upsert profile with error handling
         result = await get_db().profiles.update_one(

@@ -3,11 +3,12 @@ Comprehensive test suite for Discovery Nearby endpoint
 Tests geospatial queries, Haversine distance calculation, and compatibility scoring
 """
 import pytest
+import pytest_asyncio
 import math
 from datetime import datetime, timedelta
 from httpx import AsyncClient
+from bson import ObjectId
 from app.main import app
-from app.db import get_db
 
 
 # ===== TEST DATA =====
@@ -183,14 +184,10 @@ class TestCoordinateValidation:
 
 # ===== API ENDPOINT TESTS =====
 
-@pytest.fixture
-async def test_users():
-    """Create test users with different locations"""
-    db = get_db()
-    users_collection = db.users()
-    
-    # Clear test users
-    await users_collection.delete_many({"email": {"$regex": "^test_nearby_"}})
+@pytest_asyncio.fixture
+async def test_users(db):
+    """Create test users dengan berbagai lokasi"""
+    users_collection = db.users
     
     # Create test users
     test_users_data = [
@@ -280,16 +277,12 @@ async def test_users():
     result = await users_collection.insert_many(test_users_data)
     user_ids = [str(uid) for uid in result.inserted_ids]
     
-    # Return user IDs
-    yield {
+    return {
         "jakarta1": user_ids[0],
         "jakarta2": user_ids[1],
         "bandung": user_ids[2],
         "surabaya": user_ids[3]
     }
-    
-    # Cleanup
-    await users_collection.delete_many({"email": {"$regex": "^test_nearby_"}})
 
 
 @pytest.mark.asyncio
@@ -347,7 +340,6 @@ class TestNearbyEndpoint:
                 },
                 headers={"Authorization": f"Bearer {test_users['jakarta1']}"}
             )
-            
             assert response.status_code == 200
             data = response.json()
             
@@ -457,21 +449,21 @@ class TestNearbyEndpoint:
                 params={
                     "lat": JAKARTA_CENTER["lat"],
                     "lon": JAKARTA_CENTER["lon"],
-                    "radius_km": 150.0  # Max is 100
+                    "radius_km": 1500.0  # Max is 1000
                 },
                 headers={"Authorization": f"Bearer {test_users['jakarta1']}"}
             )
             assert response.status_code == 422
     
-    async def test_nearby_excludes_swiped_users(self, test_users):
+    async def test_nearby_excludes_swiped_users(self, test_users, db):
         """Test that swiped users are excluded from results"""
-        db = get_db()
-        swipes_collection = db.swipes()
+        swipes_collection = db.swipes
         
         # Create swipe record (jakarta1 swiped jakarta2)
         await swipes_collection.insert_one({
-            "user_id": test_users["jakarta1"],
-            "target_user_id": test_users["jakarta2"],
+            "userId": ObjectId(test_users["jakarta1"]),
+            "targetId": ObjectId(test_users["jakarta2"]),
+            "swipedUserId": ObjectId(test_users["jakarta2"]),
             "action": "like",
             "created_at": datetime.utcnow()
         })
@@ -495,11 +487,7 @@ class TestNearbyEndpoint:
             user_ids = [u["id"] for u in data["users"]]
             assert test_users["jakarta2"] not in user_ids
         
-        # Cleanup
-        await swipes_collection.delete_one({
-            "user_id": test_users["jakarta1"],
-            "target_user_id": test_users["jakarta2"]
-        })
+        await swipes_collection.delete_many({})
     
     async def test_nearby_limit(self, test_users):
         """Test limit parameter"""

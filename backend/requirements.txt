@@ -1,7 +1,7 @@
 # Core Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-pydantic[email]==2.6.0
+pydantic[email]==2.9.2
 pydantic-settings==2.1.0
 slowapi==0.1.9
 psutil==5.9.8
@@ -24,7 +24,7 @@ itsdangerous==2.1.2
 # File Upload & Processing
 python-multipart==0.0.6
 cloudinary==1.38.0
-pillow==10.2.0
+pillow==11.0.0
 
 # WebSocket
 python-socketio==5.11.0

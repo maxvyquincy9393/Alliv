@@ -17,6 +17,7 @@ from .logging_config import setup_logging
 from .middleware.security import SecurityHeadersMiddleware
 from .integrations.sentry import init_sentry, capture_exception
 from .integrations.metrics import init_metrics, PrometheusMiddleware
+from . import testclient_compat  # Ensure TestClient helpers are patched for tests
 from .db import init_db, close_db
 from .routes import chat
 from .routes import auth

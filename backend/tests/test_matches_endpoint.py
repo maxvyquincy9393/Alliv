@@ -3,65 +3,70 @@ Tests for GET /swipes/matches endpoint
 Test match list retrieval with pagination, last message, and online status
 """
 import pytest
+import pytest_asyncio
 from datetime import datetime, timedelta
 from bson import ObjectId
+
+pytestmark = pytest.mark.asyncio
+
+@pytest_asyncio.fixture
+async def test_users_with_matches(db):
+    """Create test users with matches and messages"""
+    users = []
+    for i in range(5):
+        user_data = {
+            "email": f"user{i}@test.com",
+            "name": f"User {i}",
+            "age": 25 + i,
+            "field": "Design",
+            "hashed_password": "hashed_password",
+            "avatar": f"https://example.com/avatar{i}.jpg",
+            "is_online": i < 2,
+            "last_seen": datetime.utcnow() if i >= 2 else None,
+            "created_at": datetime.utcnow()
+        }
+        result = await db.users.insert_one(user_data)
+        users.append(str(result.inserted_id))
+    
+    current_user_id = users[0]
+    matches = []
+    
+    for i in range(1, 5):
+        match_data = {
+            "user1_id": current_user_id,
+            "user2_id": users[i],
+            "created_at": datetime.utcnow() - timedelta(days=5 - i),
+            "last_message_at": datetime.utcnow() - timedelta(hours=i),
+            "unread_count_user1": i,
+            "unread_count_user2": 0
+        }
+        result = await db.matches.insert_one(match_data)
+        matches.append(str(result.inserted_id))
+    
+    for i in range(2):
+        message_data = {
+            "match_id": matches[i],
+            "sender_id": users[i + 1],
+            "content": f"Hello from user {i + 1}!",
+            "created_at": datetime.utcnow() - timedelta(hours=i + 1),
+            "read": False
+        }
+        await db.messages.insert_one(message_data)
+    
+    return {
+        "users": users,
+        "matches": matches,
+        "current_user_id": current_user_id
+    }
+
+
+@pytest.fixture
+def mock_auth_token(test_users_with_matches):
+    return test_users_with_matches["current_user_id"]
 
 
 class TestGetMatches:
     """Test GET /swipes/matches endpoint"""
-    
-    @pytest.fixture
-    async def test_users_with_matches(self, db):
-        """Create test users with matches and messages"""
-        # Create 5 test users
-        users = []
-        for i in range(5):
-            user_data = {
-                "email": f"user{i}@test.com",
-                "name": f"User {i}",
-                "age": 25 + i,
-                "field": "Design",
-                "hashed_password": "hashed_password",
-                "avatar": f"https://example.com/avatar{i}.jpg",
-                "is_online": i < 2,  # First 2 users are online
-                "last_seen": datetime.utcnow() if i >= 2 else None,
-                "created_at": datetime.utcnow()
-            }
-            result = await db.users.insert_one(user_data)
-            users.append(str(result.inserted_id))
-        
-        # Create matches between user0 and others
-        current_user_id = users[0]
-        matches = []
-        
-        for i in range(1, 5):
-            match_data = {
-                "user1_id": current_user_id,
-                "user2_id": users[i],
-                "created_at": datetime.utcnow() - timedelta(days=5-i),
-                "last_message_at": datetime.utcnow() - timedelta(hours=i),
-                "unread_count_user1": i,
-                "unread_count_user2": 0
-            }
-            result = await db.matches.insert_one(match_data)
-            matches.append(str(result.inserted_id))
-        
-        # Create last messages for some matches
-        for i in range(2):  # First 2 matches have messages
-            message_data = {
-                "match_id": matches[i],
-                "sender_id": users[i+1],
-                "content": f"Hello from user {i+1}!",
-                "created_at": datetime.utcnow() - timedelta(hours=i+1),
-                "read": False
-            }
-            await db.messages.insert_one(message_data)
-        
-        return {
-            "users": users,
-            "matches": matches,
-            "current_user_id": current_user_id
-        }
     
     async def test_get_matches_basic(self, client, test_users_with_matches, mock_auth_token):
         """Test basic match list retrieval"""
@@ -240,7 +245,7 @@ class TestGetMatches:
         # Should get all matches (4), but limit should be respected
         assert data["count"] <= 100  # Max limit enforced
     
-    async def test_get_matches_empty_list(self, client, mock_auth_token, db):
+    async def test_get_matches_empty_list(self, client, db):
         """Test getting matches when user has no matches"""
         # Create a new user with no matches
         user_data = {
@@ -252,18 +257,17 @@ class TestGetMatches:
             "created_at": datetime.utcnow()
         }
         result = await db.users.insert_one(user_data)
-        
-        # Mock auth for new user
-        # (Assuming mock_auth_token uses first user, need to handle this)
+        new_user_id = str(result.inserted_id)
         
         response = await client.get(
             "/swipes/matches",
-            headers={"Authorization": f"Bearer {mock_auth_token}"}
+            headers={"Authorization": f"Bearer {new_user_id}"}
         )
         
-        # Note: This will return matches for the mocked user
-        # To properly test empty state, you'd need to mock auth for the new user
         assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert data["matches"] == []
     
     async def test_get_matches_online_status(self, client, test_users_with_matches, mock_auth_token):
         """Test that online status is correctly returned"""
@@ -332,7 +336,7 @@ class TestGetMatches:
 class TestGetMatchesIntegration:
     """Integration tests for complete match flow"""
     
-    async def test_swipe_and_get_matches_flow(self, client, mock_auth_token, db):
+    async def test_swipe_and_get_matches_flow(self, client, db):
         """Test complete flow: swipe -> match -> get matches"""
         # Create two users
         user1_data = {
@@ -393,7 +397,7 @@ class TestGetMatchesIntegration:
         # Get matches for user1
         response = await client.get(
             "/swipes/matches",
-            headers={"Authorization": f"Bearer {mock_auth_token}"}
+            headers={"Authorization": f"Bearer {user1_id}"}
         )
         
         assert response.status_code == 200

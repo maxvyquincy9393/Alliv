@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 /* Leaflet CSS for map functionality */
 @import 'leaflet/dist/leaflet.css';
@@ -8,18 +8,33 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'SF Pro Display', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'SF Pro Display', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
   font-weight: 400;
-  
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.95);
-  background-color: #0B0B0B;
-  
+  background-color: #050608;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* UI tokens */
+  --color-bg: #050608;
+  --color-bg-soft: #0b0f14;
+  --color-bg-subtle: rgba(255, 255, 255, 0.02);
+  --color-card: rgba(255, 255, 255, 0.04);
+  --color-card-strong: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-text: rgba(255, 255, 255, 0.95);
+  --color-text-muted: rgba(255, 255, 255, 0.65);
+  --color-highlight: #35f5ff;
+  --color-accent: #8c6ff7;
+  --color-warm: #ffec3d;
+  --grid-stroke: rgba(148, 163, 184, 0.07);
+  --blur-strength: 28px;
+  --card-shadow: 0 25px 45px rgba(2, 6, 23, 0.45);
 }
 
 * {
@@ -32,13 +47,106 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(180deg, #0B0B0B 0%, #121212 100%);
+  background: radial-gradient(circle at 10% 20%, rgba(53, 245, 255, 0.08), transparent 55%),
+    radial-gradient(circle at 80% 0%, rgba(255, 236, 61, 0.08), transparent 45%),
+    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-soft) 65%, #050608 100%);
   background-attachment: fixed;
+  color: var(--color-text);
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--grid-stroke) 1px, transparent 0);
+  background-size: 80px 80px;
+  opacity: 0.25;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
+}
+
+/* Layout helpers */
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: transparent;
+}
+
+.shell-content {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 4vw, 2.5rem);
+}
+
+.panel {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1.5rem;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(var(--blur-strength));
+  -webkit-backdrop-filter: blur(var(--blur-strength));
+}
+
+.panel-strong {
+  background: var(--color-card-strong);
+  border-color: var(--color-border-strong);
+}
+
+.subtle-grid {
+  position: relative;
+  isolation: isolate;
+}
+
+.subtle-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(transparent 95%, rgba(255, 255, 255, 0.04) 100%),
+    linear-gradient(90deg, transparent 95%, rgba(255, 255, 255, 0.04) 100%);
+  background-size: 32px 32px;
+  opacity: 0.2;
+  z-index: -1;
+  border-radius: inherit;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.section-heading span {
+  font-size: 0.9rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.section-heading h2 {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 /* Glassmorphism utilities */
@@ -99,17 +207,25 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-/* Blue glow effects */
-.glow-blue {
-  box-shadow: 0 0 20px rgba(161, 161, 255, 0.4);
+/* Neon glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(53, 245, 255, 0.5);
 }
 
-.glow-blue-hover:hover {
-  box-shadow: 0 0 30px rgba(161, 161, 255, 0.6);
+.glow-cyan-hover:hover {
+  box-shadow: 0 0 30px rgba(53, 245, 255, 0.7);
 }
 
-.glow-blue-ring {
-  box-shadow: 0 0 0 2px rgba(161, 161, 255, 0.5);
+.glow-cyan-ring {
+  box-shadow: 0 0 0 2px rgba(53, 245, 255, 0.6);
+}
+
+.glow-yellow {
+  box-shadow: 0 0 20px rgba(255, 236, 61, 0.5);
+}
+
+.glow-yellow-hover:hover {
+  box-shadow: 0 0 30px rgba(255, 236, 61, 0.7);
 }
 
 /* Custom scrollbar */
@@ -123,12 +239,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(161, 161, 255, 0.3);
+  background: rgba(53, 245, 255, 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(161, 161, 255, 0.5);
+  background: rgba(53, 245, 255, 0.5);
 }
 
 /* Smooth transitions */
@@ -143,14 +259,14 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgba(161, 161, 255, 0.6);
+  box-shadow: inset 0 0 0 2px rgba(53, 245, 255, 0.6);
 }
 
 /* Input focus glow */
 input:focus,
 textarea:focus {
-  border-color: rgba(161, 161, 255, 0.5);
-  box-shadow: inset 0 0 20px rgba(161, 161, 255, 0.1);
+  border-color: rgba(53, 245, 255, 0.5);
+  box-shadow: inset 0 0 20px rgba(53, 245, 255, 0.1);
 }
 
 /* Shimmer effect */
@@ -195,7 +311,7 @@ textarea:focus {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(161, 161, 255, 0.8),
+    rgba(53, 245, 255, 0.8),
     transparent
   );
   animation: pulse-line 1.5s ease-in-out infinite;
@@ -220,7 +336,14 @@ textarea:focus {
 
 /* Text gradient */
 .text-gradient {
-  background: linear-gradient(135deg, #FFFFFF, #A1A1FF);
+  background: linear-gradient(135deg, #35F5FF, #FFEC3D);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-white {
+  background: linear-gradient(135deg, #FFFFFF, #35F5FF);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -256,7 +379,7 @@ img[loading="lazy"].loaded {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(161, 161, 255, 0.3), rgba(255, 255, 255, 0.1));
+  background: linear-gradient(135deg, rgba(53, 245, 255, 0.4), rgba(255, 236, 61, 0.3));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;

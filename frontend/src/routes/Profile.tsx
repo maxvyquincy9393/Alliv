@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { Layout } from '../components/Layout';
 
 interface UserProfile {
   name: string;
@@ -53,155 +53,130 @@ export const Profile = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-black"></div>
-      </div>
+      <Layout>
+        <div className="shell-content flex min-h-screen items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/20 border-t-white" />
+        </div>
+      </Layout>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-4">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold text-black mb-2">
-            {error || 'Profile not found'}
-          </h2>
-          <button
-            onClick={() => navigate('/setup-profile')}
-            className="mt-4 px-6 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"
-          >
-            Complete Profile
-          </button>
+      <Layout>
+        <div className="shell-content min-h-screen flex items-center justify-center">
+          <div className="panel p-6 text-center space-y-3">
+            <p className="text-white font-semibold text-lg">{error || 'Profile not found'}</p>
+            <button
+              onClick={() => navigate('/setup-profile')}
+              className="rounded-full bg-white text-black px-5 py-2 text-sm font-semibold"
+            >
+              Complete profile
+            </button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-black">Alliv</h1>
-          <div className="flex gap-4">
-            <button
-              onClick={() => navigate('/discover')}
-              className="px-4 py-2 text-gray-600 hover:text-black transition-colors"
-            >
-              Discover
-            </button>
-            <button
-              onClick={() => navigate('/setup-profile')}
-              className="px-4 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"
-            >
-              Edit Profile
-            </button>
-          </div>
-        </div>
-      </header>
+  const photos = profile.photos || [];
+  const mainPhoto = photos[0];
+  const secondaryPhotos = photos.slice(1);
 
-      {/* Profile Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl overflow-hidden shadow-sm"
-        >
-          {/* Photos Gallery */}
-          {profile.photos && profile.photos.length > 0 && (
-            <div className="grid grid-cols-3 gap-1">
-              {profile.photos.map((photo, index) => (
-                <div
-                  key={index}
-                  className="aspect-square bg-gray-100 overflow-hidden"
-                >
-                  <img
-                    src={photo}
-                    alt={`${profile.name} - Photo ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
+  return (
+    <Layout>
+      <div className="shell-content space-y-8 pb-16">
+        <section className="panel p-6 sm:p-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Profile</p>
+            <h1 className="text-3xl font-semibold text-white">
+              {profile.name}
+              {profile.age ? <span className="text-white/60 font-normal ml-2">{profile.age}</span> : null}
+            </h1>
+            <p className="text-white/60 text-sm">{profile.email}</p>
+            {profile.bio && <p className="text-white/70 text-sm leading-relaxed">{profile.bio}</p>}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate('/discover')}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:text-white"
+              >
+                Browse collaborators
+              </button>
+              <button
+                onClick={() => navigate('/setup-profile')}
+                className="rounded-full bg-white text-black px-4 py-2 text-sm font-semibold"
+              >
+                Edit profile
+              </button>
+            </div>
+          </div>
+          {mainPhoto && (
+            <div className="w-full md:w-1/2 rounded-[32px] overflow-hidden border border-white/10 shadow-[0_25px_45px_rgba(2,6,23,0.45)]">
+              <img src={mainPhoto} alt={profile.name} className="w-full h-full object-cover" />
             </div>
           )}
+        </section>
 
-          {/* Profile Info */}
-          <div className="p-8">
-            {/* Name & Age */}
-            <div className="mb-6">
-              <h2 className="text-3xl font-bold text-black mb-1">
-                {profile.name}
-                {profile.age && (
-                  <span className="text-gray-500 font-normal ml-2">
-                    {profile.age}
+        {secondaryPhotos.length > 0 && (
+          <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {secondaryPhotos.map((photo, index) => (
+              <div
+                key={photo + index}
+                className="aspect-[4/5] rounded-[28px] overflow-hidden border border-white/10 bg-white/5"
+              >
+                <img src={photo} alt={`${profile.name} photo ${index + 2}`} className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </section>
+        )}
+
+        <section className="grid gap-6 md:grid-cols-2">
+          {profile.skills?.length ? (
+            <InfoBlock title="Skills">
+              <div className="flex flex-wrap gap-2">
+                {profile.skills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80"
+                  >
+                    {skill}
                   </span>
-                )}
-              </h2>
-              <p className="text-gray-600">{profile.email}</p>
-            </div>
-
-            {/* Bio */}
-            {profile.bio && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-black mb-2">About</h3>
-                <p className="text-gray-700 leading-relaxed">{profile.bio}</p>
+                ))}
               </div>
-            )}
+            </InfoBlock>
+          ) : null}
 
-            {/* Skills */}
-            {profile.skills && profile.skills.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-black mb-3">Skills</h3>
-                <div className="flex flex-wrap gap-2">
-                  {profile.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="px-4 py-2 bg-black text-white rounded-full text-sm font-medium"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
+          {profile.interests?.length ? (
+            <InfoBlock title="Interests">
+              <div className="flex flex-wrap gap-2">
+                {profile.interests.map((interest) => (
+                  <span key={interest} className="rounded-full bg-white text-black px-4 py-2 text-sm font-semibold">
+                    {interest}
+                  </span>
+                ))}
               </div>
-            )}
+            </InfoBlock>
+          ) : null}
 
-            {/* Interests */}
-            {profile.interests && profile.interests.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-black mb-3">Interests</h3>
-                <div className="flex flex-wrap gap-2">
-                  {profile.interests.map((interest) => (
-                    <span
-                      key={interest}
-                      className="px-4 py-2 bg-gray-100 text-black rounded-full text-sm"
-                    >
-                      {interest}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Goals */}
-            {profile.goals && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-black mb-2">Goals</h3>
-                <p className="text-gray-700 leading-relaxed">{profile.goals}</p>
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Actions */}
-        <div className="mt-6 flex gap-4 justify-center">
-          <button
-            onClick={() => navigate('/discover')}
-            className="px-8 py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-colors"
-          >
-            Start Discovering
-          </button>
-        </div>
+          {profile.goals ? (
+            <InfoBlock title="Goals">
+              <p className="text-white/70 text-sm leading-relaxed">{profile.goals}</p>
+            </InfoBlock>
+          ) : null}
+        </section>
       </div>
-    </div>
+    </Layout>
   );
 };
+
+interface InfoBlockProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+const InfoBlock = ({ title, children }: InfoBlockProps) => (
+  <div className="panel p-6 space-y-3">
+    <p className="text-xs uppercase tracking-[0.3em] text-white/50">{title}</p>
+    {children}
+  </div>
+);

@@ -1,36 +1,35 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Paperclip, Send, AlertCircle } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { ChatBubble } from '../components/ChatBubble';
 import { TypingIndicator } from '../components/TypingIndicator';
-import { AIIcebreakers } from '../components/AIIcebreakers';
-import { FlirtDetector } from '../components/FlirtDetector';
 import { useAuth } from '../hooks/useAuth';
-import { useSocket } from '../hooks/useSocket'; // ✅ WebSocket instead of REST
-import { fadeInUp, stagger } from '../lib/motion';
+import { useSocket, SocketMessage } from '../hooks/useSocket';
+import type { Message } from '../types/message';
+
+const mapSocketMessage = (message: SocketMessage): Message => ({
+  id: message._id,
+  senderId: message.senderId,
+  receiverId: message.matchId,
+  content: message.content,
+  timestamp: new Date(message.createdAt),
+  read: Boolean(message.readAt),
+});
 
 export const Chat = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const { matchId } = useParams<{ matchId: string }>(); // Get match ID from URL
-  
-  // ✅ Use WebSocket for real-time chat
-  const { 
-    messages, 
-    typing, 
-    online, 
-    connected, 
-    sendMessage, 
-    sendTyping, 
-    error 
-  } = useSocket(matchId || null);
-  
+  const { matchId } = useParams<{ matchId: string }>();
+
+  const { messages, typing, online, connected, sendMessage, sendTyping, error } = useSocket(
+    matchId || null
+  );
+
   const [messageInput, setMessageInput] = useState('');
-  const [showIcebreakers, setShowIcebreakers] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<number | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -42,35 +41,28 @@ export const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ Handle typing indicator with debounce
+  const formattedMessages = useMemo(() => messages.map(mapSocketMessage), [messages]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessageInput(e.target.value);
-    
-    // Send typing=true
     sendTyping(true);
-    
-    // Clear existing timeout
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
-    // Set timeout to stop typing after 2 seconds of inactivity
-    typingTimeoutRef.current = window.setTimeout(() => {
+
+    typingTimeoutRef.current = setTimeout(() => {
       sendTyping(false);
     }, 2000);
   };
 
   const handleSend = () => {
-    if (messageInput.trim()) {
-      sendMessage(messageInput); // ✅ WebSocket send
-      setMessageInput('');
-      setShowIcebreakers(false);
-      
-      // Stop typing indicator
-      sendTyping(false);
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+    if (!messageInput.trim()) return;
+    sendMessage(messageInput);
+    setMessageInput('');
+    sendTyping(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
   };
 
@@ -81,194 +73,139 @@ export const Chat = () => {
     }
   };
 
-  const handleIcebreakerSelect = (message: string) => {
-    setMessageInput(message);
-    setShowIcebreakers(false);
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-      console.log('File selected:', file.name);
-      sendMessage(`📎 Shared file: ${file.name}`);
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
     }
+
+    sendMessage(`Shared a file: ${file.name}`);
   };
 
-  const allMessages = messages.map(m => m.content);
+  const noConnection = !matchId || !connected;
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto px-4 pt-8 pb-24">
-        <motion.div
-          variants={stagger(0.1)}
-          initial="hidden"
-          animate="show"
-          className="space-y-6"
-        >
-          {/* Header */}
-          <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <img
-                    src="https://i.pravatar.cc/150?img=1"
-                    alt="Chat partner"
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-accent-blue/30"
-                  />
-                  {/* ✅ Real-time online status */}
-                  {online && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full ring-2 ring-background" />
-                  )}
-                  {!online && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-gray-400 rounded-full ring-2 ring-background" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Alex Chen</h2>
-                  {/* ✅ Show connection status */}
-                  <p className="text-xs text-white/50">
-                    {connected ? (online ? 'Active now' : 'Offline') : 'Connecting...'}
-                  </p>
-                </div>
-              </div>
-              
-              {/* ✅ Show connection error */}
-              {error && (
-                <div className="text-xs text-red-400">
-                  {error}
-                </div>
-              )}
-              
-              <button 
-                onClick={() => navigate('/profile/1')} 
-                className="glass px-4 py-2 rounded-xl text-sm text-white/70 hover:text-white transition-all"
-              >
-                View Profile
-              </button>
+      <div className="shell-content space-y-8 pb-16">
+        <section className="panel p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Chat</p>
+              <h1 className="text-3xl font-semibold text-white">Keep the momentum going</h1>
+              <p className="text-white/60 text-sm mt-2">
+                {matchId
+                  ? `You’re chatting inside room ${matchId}. Messages sync instantly across devices.`
+                  : 'Start a conversation by matching with someone in Discover.'}
+              </p>
             </div>
-          </motion.div>
-
-          {/* Flirt Detector */}
-          <FlirtDetector messages={allMessages} />
-
-          {/* AI Icebreakers */}
-          <AnimatePresence>
-            {showIcebreakers && messages.length === 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <AIIcebreakers
-                  userName="Alex"
-                  userField="Photography"
-                  onSelect={handleIcebreakerSelect}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Messages */}
-          <div className="glass-card rounded-2xl p-6 min-h-[500px] max-h-[600px] overflow-y-auto">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-[400px]">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">💬</div>
-                  <h3 className="text-xl font-semibold text-white mb-2">Start the conversation</h3>
-                  <p className="text-white/40">
-                    Use an AI-suggested opener or write your own message
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((msg) => (
-                  <ChatBubble
-                    key={msg._id}
-                    message={{
-                      id: msg._id,
-                      content: msg.content,
-                      senderId: msg.senderId,
-                      receiverId: matchId || '',
-                      timestamp: new Date(msg.createdAt),
-                      read: !!msg.readAt
-                    }}
-                    isOwn={msg.senderId === user?.id}
-                  />
-                ))}
-                {/* ✅ Real-time typing indicator */}
-                {typing && <TypingIndicator />}
-                <div ref={messagesEndRef} />
-              </>
-            )}
+            <div className="flex gap-4 text-sm text-white/70">
+              <StatusBadge label="Connection" active={connected} />
+              <StatusBadge label="Partner online" active={online} />
+            </div>
           </div>
+          {error && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              <AlertCircle className="w-4 h-4" />
+              <span>{error}</span>
+            </div>
+          )}
+        </section>
 
-          {/* Input Area */}
-          <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-4">
-            <div className="flex items-end gap-3">
-              {/* File Upload */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*,video/*,.pdf,.doc,.docx"
-                onChange={handleFileChange}
-              />
-              <button
-                onClick={handleFileSelect}
-                className="p-3 glass rounded-xl text-white/60 hover:text-white hover:shadow-glow-blue transition-all"
-                title="Attach file (max 10MB)"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              </button>
-
-              {/* Text Input */}
-              <div className="flex-1 relative">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]">
+          <div className="panel p-0 flex flex-col h-[70vh]">
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              {noConnection ? (
+                <div className="h-full flex flex-col items-center justify-center text-center text-white/60 space-y-2">
+                  <p className="text-lg text-white">No active match yet</p>
+                  <p className="text-sm">
+                    Swipe or browse projects to start a conversation. We’ll drop you into chat once a match happens.
+                  </p>
+                  <button
+                    onClick={() => navigate('/discover')}
+                    className="mt-4 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:text-white"
+                  >
+                    Go to Discover
+                  </button>
+                </div>
+              ) : formattedMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center text-white/60">
+                  <p>No messages yet.</p>
+                  <p className="text-sm">Break the ice with a quick hello.</p>
+                </div>
+              ) : (
+                formattedMessages.map((message) => (
+                  <ChatBubble key={message.id} message={message} isOwn={message.senderId === user?.id} />
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="border-t border-white/5 px-6 py-4 space-y-3">
+              {typing && !noConnection && <TypingIndicator />}
+              <div className="flex items-start gap-3">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 w-11 rounded-xl border border-white/10 text-white/70 hover:text-white flex items-center justify-center"
+                  aria-label="Attach file"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
                 <textarea
                   value={messageInput}
                   onChange={handleInputChange}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type a message..."
-                  rows={1}
-                  className="w-full px-4 py-3 glass rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-accent-blue/50 resize-none"
-                  style={{ maxHeight: '120px' }}
+                  onKeyDown={handleKeyPress}
+                  placeholder={noConnection ? 'Connect with someone to start typing...' : 'Type a message...'}
+                  className={`flex-1 min-h-[44px] max-h-36 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none ${
+                    noConnection ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                  disabled={noConnection}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={noConnection}
+                  className="h-11 px-4 rounded-2xl bg-white text-black font-semibold hover:-translate-y-0.5 transition-transform disabled:opacity-60"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
                 />
               </div>
-
-              {/* Voice Note (UI only) */}
-              <button
-                className="p-3 glass rounded-xl text-white/60 hover:text-white hover:shadow-glow-blue transition-all"
-                title="Voice note"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
-
-              {/* Send Button */}
-              <button
-                onClick={handleSend}
-                disabled={!messageInput.trim()}
-                className="p-3 bg-accent-blue rounded-xl text-white hover:shadow-glow-blue transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+          <aside className="panel p-6 space-y-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/40">Pro tips</p>
+            <ul className="space-y-2 text-sm text-white/70">
+              <li>- Share calendar links directly to plan a sync.</li>
+              <li>- Add context or links so your collaborator knows where to jump in.</li>
+              <li>- Attach moodboards or prototypes if you’ve already started.</li>
+            </ul>
+            {noConnection && (
+              <div className="rounded-2xl border border-white/10 p-4 text-sm text-white/70">
+                You’re not connected to anyone yet. Head over to Discover, Projects, or Events to start a new chat.
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </Layout>
   );
 };
+
+const StatusBadge = ({ label, active }: { label: string; active: boolean }) => (
+  <span
+    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs ${
+      active ? 'bg-white text-black' : 'bg-white/10 text-white/60'
+    }`}
+  >
+    <span
+      className={`h-2 w-2 rounded-full ${active ? 'bg-emerald-500' : 'bg-white/30'}`}
+    />
+    {label}
+  </span>
+);

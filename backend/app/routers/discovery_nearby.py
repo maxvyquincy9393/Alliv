@@ -58,7 +58,7 @@ class NearbyUserResponse(BaseModel):
 class NearbyUsersResponse(BaseModel):
     """Response for nearby users discovery"""
     users: List[NearbyUserResponse]
-    count: int
+    total: int
     search_center: Dict[str, float]
     radius_km: float
     field_filter: Optional[str] = None
@@ -67,7 +67,7 @@ class NearbyUsersResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "users": [...],
-                "count": 5,
+                "total": 5,
                 "search_center": {"lat": -6.2088, "lon": 106.8456},
                 "radius_km": 10.0,
                 "field_filter": "Photography"
@@ -229,9 +229,9 @@ def format_user_response(
 
 @router.get("/nearby", response_model=NearbyUsersResponse)
 async def discover_nearby_users(
-    lat: float = Query(..., ge=-90, le=90, description="Your latitude (-90 to 90)"),
-    lon: float = Query(..., ge=-180, le=180, description="Your longitude (-180 to 180)"),
-    radius_km: float = Query(10.0, ge=0.1, le=100, description="Search radius in kilometers (0.1-100)"),
+    lat: float = Query(..., description="Your latitude (-90 to 90)"),
+    lon: float = Query(..., description="Your longitude (-180 to 180)"),
+    radius_km: float = Query(10.0, ge=0.1, le=1000, description="Search radius in kilometers (0.1-1000)"),
     field: Optional[str] = Query(None, description="Filter by creative field (e.g., 'Photography')"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of results"),
     current_user: dict = Depends(get_current_user)
@@ -250,13 +250,13 @@ async def discover_nearby_users(
     **Query Parameters:**
     - lat: Your latitude (-90 to 90)
     - lon: Your longitude (-180 to 180)
-    - radius_km: Search radius in km (0.1-100, default 10)
+    - radius_km: Search radius in km (0.1-1000, default 10)
     - field: Filter by creative field (optional)
     - limit: Max results (1-100, default 20)
     
     **Returns:**
     - users: List of nearby users with distance & compatibility
-    - count: Number of users returned
+    - total: Number of users returned
     - search_center: Your search coordinates
     - radius_km: Applied search radius
     - field_filter: Applied field filter (if any)
@@ -359,18 +359,6 @@ async def discover_nearby_users(
             
             # Rough bounding box to reduce search space
             # 1 degree ≈ 111 km
-            lat_range = radius_km / 111.0
-            lon_range = radius_km / (111.0 * math.cos(math.radians(lat)))
-            
-            query_filters["location.lat"] = {
-                "$gte": lat - lat_range,
-                "$lte": lat + lat_range
-            }
-            query_filters["location.lon"] = {
-                "$gte": lon - lon_range,
-                "$lte": lon + lon_range
-            }
-            
             users_cursor = get_db().users.find(query_filters)
             
             nearby_users = []
@@ -378,6 +366,11 @@ async def discover_nearby_users(
                 user_location = user.get('location', {})
                 user_lat = user_location.get('lat')
                 user_lon = user_location.get('lon')
+                
+                coordinates = user_location.get('coordinates')
+                if coordinates and len(coordinates) >= 2:
+                    user_lon = coordinates[0]
+                    user_lat = coordinates[1]
                 
                 if user_lat is None or user_lon is None:
                     continue  # Skip users without location
@@ -430,7 +423,7 @@ async def discover_nearby_users(
         
         return NearbyUsersResponse(
             users=sorted_users,
-            count=len(sorted_users),
+            total=len(sorted_users),
             search_center={"lat": lat, "lon": lon},
             radius_km=radius_km,
             field_filter=field
@@ -451,9 +444,9 @@ async def discover_nearby_users(
 
 @router.get("/nearby/stats")
 async def get_nearby_stats(
-    lat: float = Query(..., ge=-90, le=90),
-    lon: float = Query(..., ge=-180, le=180),
-    radius_km: float = Query(10.0, ge=0.1, le=100),
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius_km: float = Query(10.0, ge=0.1, le=1000),
     current_user: dict = Depends(get_current_user)
 ):
     """

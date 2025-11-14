@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { MapPin, Map, LayoutGrid, Filter, Compass } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { SwipeCard } from '../components/SwipeCard';
 import { MatchModal } from '../components/MatchModal';
 import MapsView from '../components/MapsView';
-import { MapPin, LayoutGrid, Map, Filter, Navigation } from 'lucide-react';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../hooks/useAuth';
 import { discoveryAPI } from '../services/api';
-import type { User } from '../types/user';
+import type { User as ProfileUser } from '../types/user';
 
-interface ExtendedUser extends User {
+interface ExtendedUser extends ProfileUser {
   distance?: number;
   lat?: number;
   lng?: number;
@@ -19,14 +18,11 @@ interface ExtendedUser extends User {
   matchScore?: number;
 }
 
-// No mock data - using real API
-
 export const Discover = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  // State
+
   const [users, setUsers] = useState<ExtendedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,71 +30,64 @@ export const Discover = () => {
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<ExtendedUser | null>(null);
   const [mode, setMode] = useState<'online' | 'nearby'>('online');
-  const [viewMode, setViewMode] = useState<'cards' | 'map'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'map'>(
+    (searchParams.get('mode') as 'cards' | 'map') || 'cards'
+  );
   const [radius, setRadius] = useState(Number(searchParams.get('radius')) || 10);
-  const [filterOpen, setFilterOpen] = useState(false);
   const [onlineOnly, setOnlineOnly] = useState(false);
-  const [field] = useState<string | null>(null); // Field filter not yet implemented
-  
-  const { location, loading: locationLoading } = useGeolocation();
-  const userLocation = location ? { lat: location.latitude, lon: location.longitude } : null;
 
-  // Authentication check
+  const { location, loading: locationLoading } = useGeolocation();
+  const userLocation = useMemo(
+    () => (location ? { lat: location.latitude, lon: location.longitude } : null),
+    [location?.latitude, location?.longitude]
+  );
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login?redirect=/discover', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch users from API with cancellation support
   useEffect(() => {
     const abortController = new AbortController();
-    
+
     const fetchUsers = async () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         let response;
         if (mode === 'nearby' && userLocation) {
-          response = await discoveryAPI.discoverNearby({
-            lat: userLocation.lat,
-            lon: userLocation.lon,
-            radiusKm: radius,
-            field: field || undefined,
-            limit: 20
-          }, abortController.signal);
+          response = await discoveryAPI.discoverNearby(
+            { lat: userLocation.lat, lon: userLocation.lon, radiusKm: radius, limit: 20 },
+            abortController.signal
+          );
         } else {
-          response = await discoveryAPI.discoverOnline({
-            field: field || undefined,
-            limit: 20
-          }, abortController.signal);
+          response = await discoveryAPI.discoverOnline({ limit: 20 }, abortController.signal);
         }
-        
-        // Check if request was cancelled
-        if (response.error === 'Request cancelled') {
-          console.log('User discovery request was cancelled');
+
+        if (response.error) {
+          if (response.error !== 'Request cancelled') {
+            throw new Error(response.error);
+          }
           return;
         }
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
+
         const fetchedUsers = response.data?.users || [];
-        setUsers(fetchedUsers.map((user: any) => ({
-          ...user,
-          lat: user.location?.lat,
-          lng: user.location?.lon,
-          distance: user.distance,
-          isOnline: user.isOnline || false,
-          matchScore: user.compatibility || 0
-        })));
+        setUsers(
+          fetchedUsers.map((user: any) => ({
+            ...user,
+            lat: user.location?.lat,
+            lng: user.location?.lon,
+            distance: user.distance,
+            isOnline: user.isOnline ?? false,
+            matchScore: user.compatibility ?? 0,
+          }))
+        );
+        setCurrentIndex(0);
       } catch (err: any) {
-        // Don't set error state if request was aborted
-        if (err.name !== 'AbortError' && err.message !== 'Request cancelled') {
-          console.error('Failed to fetch users:', err);
-          setError(err instanceof Error ? err.message : 'Failed to load users');
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Failed to load users');
         }
       } finally {
         setLoading(false);
@@ -108,15 +97,10 @@ export const Discover = () => {
     if (isAuthenticated) {
       fetchUsers();
     }
-    
-    // Cleanup function - cancel request on unmount or dependency change
-    return () => {
-      abortController.abort();
-    };
-  }, [mode, userLocation, radius, field, isAuthenticated]);
 
+    return () => abortController.abort();
+  }, [mode, userLocation, radius, isAuthenticated]);
 
-  // Update URL when view mode or radius changes
   useEffect(() => {
     const params = new URLSearchParams();
     params.set('mode', viewMode);
@@ -124,306 +108,343 @@ export const Discover = () => {
     setSearchParams(params);
   }, [viewMode, radius, setSearchParams]);
 
-  const handleSwipe = (direction: 'left' | 'right' | 'up') => {
-    const currentUser = users[currentIndex];
-    
-    if (direction === 'right') {
-      // It's a match!
+  const filteredUsers = useMemo(
+    () => (onlineOnly ? users.filter((user) => user.isOnline) : users),
+    [users, onlineOnly]
+  );
+
+  const mapFriendlyUsers = useMemo(
+    () =>
+      filteredUsers
+        .filter((user) => typeof user.lat === 'number' && typeof user.lng === 'number')
+        .map((user) => ({
+          ...user,
+          location:
+            typeof user.location === 'string'
+              ? {
+                  lat: user.lat ?? 0,
+                  lon: user.lng ?? 0,
+                  city: user.location,
+                }
+              : user.location ?? { lat: user.lat ?? 0, lon: user.lng ?? 0 },
+        })),
+    [filteredUsers]
+  );
+
+  const handleSwipe = (decision: 'pass' | 'save') => {
+    const currentUser = filteredUsers[currentIndex];
+    if (!currentUser) return;
+
+    if (decision === 'save') {
       setMatchedUser(currentUser);
       setShowMatch(true);
     }
-    
-    // Move to next user
-    if (currentIndex < users.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
+
+    setCurrentIndex((prev) => prev + 1);
   };
 
+  const nearbyLabel = userLocation
+    ? `${radius} km | ${locationLoading ? 'Locating...' : 'Location updated'}`
+    : 'Enable location for nearby mode';
 
-  const filteredUsers = onlineOnly 
-    ? users.filter(u => u.isOnline)
-    : users;
+  const radiusOptions = [5, 10, 25, 50];
 
-  const nearbyUsers = radius < 50
-    ? filteredUsers.filter(u => u.distance && u.distance <= radius)
-    : filteredUsers;
-
-  // Loading state
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-            <p className="text-gray-400">Finding collaborators...</p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center max-w-md">
-            <div className="text-red-500 text-5xl mb-4">⚠️</div>
-            <h2 className="text-xl font-bold text-white mb-2">Oops!</h2>
-            <p className="text-gray-400 mb-4">{error}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
+  const authIssue = error?.toLowerCase().includes('credential');
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="glass-strong rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">Discover</h1>
-              <span className="px-3 py-1 rounded-full bg-accent-blue/20 text-accent-blue text-sm">
-                {viewMode === 'map' ? `${nearbyUsers.length} nearby` : `${filteredUsers.length} online`}
-              </span>
+      <div className="shell-content space-y-8 pb-16">
+        <section className="panel p-6 sm:p-8 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Discover</p>
+              <h1 className="text-3xl font-semibold text-white">Find collaborators by context</h1>
+              <p className="text-white/60 text-sm mt-2">
+                Switch between live results and nearby matches. Everything syncs with your swipe deck.
+              </p>
             </div>
-
-            {/* Mode Toggle */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setMode('online')}
-                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  mode === 'online'
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
-                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
-                }`}
-              >
-                Online
-              </button>
-              <button
-                onClick={() => setMode('nearby')}
-                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  mode === 'nearby'
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
-                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
-                }`}
-              >
-                <MapPin className="w-4 h-4" />
-                Nearby
-              </button>
-              
-              <button
-                onClick={() => setFilterOpen(!filterOpen)}
-                className="p-2 glass rounded-lg hover:bg-white/10 transition-colors ml-2"
-              >
-                <Filter className="w-5 h-5 text-white" />
-              </button>
+            <div className="glass rounded-full p-1 flex gap-1">
+              {(['online', 'nearby'] as const).map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setMode(value)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium capitalize ${
+                    mode === value ? 'bg-white text-black' : 'text-white/60'
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Filter Panel */}
-          <AnimatePresence>
-            {filterOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
-              >
-                <div className="flex flex-wrap items-center gap-6">
-                  {/* Radius Slider */}
-                  {viewMode === 'map' && (
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-4 h-4 text-white/60" />
-                      <span className="text-white/60 text-sm">Radius:</span>
-                      <input
-                        type="range"
-                        min="1"
-                        max="50"
-                        value={radius}
-                        onChange={(e) => setRadius(Number(e.target.value))}
-                        className="w-32"
-                      />
-                      <span className="text-white font-medium">
-                        {radius === 50 ? 'Online' : `${radius} km`}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Online Only */}
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={onlineOnly}
-                      onChange={(e) => setOnlineOnly(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span className="text-white/60 text-sm">Online only</span>
-                  </label>
-
-                  {/* Skills Filter */}
-                  <div className="flex items-center gap-3">
-                    <span className="text-white/60 text-sm">Skills:</span>
-                    <select className="bg-dark-surface border border-white/10 rounded-lg px-3 py-1 text-white text-sm">
-                      <option value="">All Skills</option>
-                      <option value="developer">Developer</option>
-                      <option value="designer">Designer</option>
-                      <option value="photographer">Photographer</option>
-                    </select>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* View Mode Toggle for Nearby Mode */}
-        {mode === 'nearby' && (
-          <div className="flex gap-2 mb-4 justify-center">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={() => setViewMode('cards')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
-                viewMode === 'cards' 
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
-                  : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
+                viewMode === 'cards'
+                  ? 'bg-white text-black'
+                  : 'bg-white/5 text-white/70 hover:text-white'
               }`}
             >
-              <LayoutGrid className="inline mr-2" size={18} />
-              Cards View
+              <LayoutGrid className="w-4 h-4" />
+              Cards
             </button>
             <button
               onClick={() => setViewMode('map')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
-                viewMode === 'map' 
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
-                  : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
+                viewMode === 'map'
+                  ? 'bg-white text-black'
+                  : 'bg-white/5 text-white/70 hover:text-white'
               }`}
             >
-              <Map className="inline mr-2" size={18} />
-              Map View
+              <Map className="w-4 h-4" />
+              Map
             </button>
           </div>
-        )}
+        </section>
 
-        {/* Main Content */}
-        {mode === 'nearby' && viewMode === 'map' ? (
-          /* Map View for Nearby Mode */
-          <div className="h-[600px] relative rounded-xl overflow-hidden">
-            {/* Map View */}
-            {location ? (
-                <MapsView
-                  users={nearbyUsers.map(user => ({
-                    id: user.id,
-                    name: user.name,
-                    age: user.age,
-                    field: user.interests?.[0] || 'General',
-                    photos: [user.avatar],
-                    location: {
-                      lat: user.lat || -6.2088,
-                      lon: user.lng || 106.8456,
-                      city: typeof user.location === 'string' ? user.location : (user.location?.city || 'Jakarta, Indonesia')
-                    },
-                    distance: user.distance,
-                    compatibility: user.matchScore
-                  }))}
-                  center={{ 
-                    lat: location.latitude, 
-                    lng: location.longitude 
-                  }}
-                  radius={radius}
-                  onUserClick={(user) => {
-                    // Navigate directly to user profile
-                    navigate(`/profiles/${user.id}`);
-                  }}
+        <div className="grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
+          <aside className="panel p-6 space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/40 mb-3">Location</p>
+              <div className="flex items-center gap-2 text-sm text-white/70">
+                <MapPin className="w-4 h-4" />
+                <span>{nearbyLabel}</span>
+              </div>
+              <div className="mt-4">
+                <input
+                  type="range"
+                  min={5}
+                  max={50}
+                  step={5}
+                  value={radius}
+                  onChange={(e) => setRadius(Number(e.target.value))}
+                  className="w-full accent-white"
+                  disabled={mode !== 'nearby'}
                 />
-              ) : (
-                <div className="flex items-center justify-center h-full glass">
-                  <div className="text-center">
-                    <Navigation className="w-12 h-12 text-accent-blue mx-auto mb-4 animate-pulse" />
-                    <p className="text-white/60">
-                      {locationLoading ? 'Getting your location...' : 'Location required for map view'}
-                    </p>
-                  </div>
+                <div className="flex justify-between text-xs text-white/50 mt-2">
+                  {radiusOptions.map((value) => (
+                    <button
+                      key={value}
+                      className={`px-2 py-1 rounded ${
+                        radius === value ? 'bg-white/20 text-white' : 'text-white/50'
+                      }`}
+                      onClick={() => setRadius(value)}
+                      disabled={mode !== 'nearby'}
+                    >
+                      {value}km
+                    </button>
+                  ))}
                 </div>
-              )}
-          </div>
-        ) : (
-          /* Cards View */
-          <div className="flex justify-center items-center min-h-[600px]">
-            {/* Test card visibility */}
-            <div className="absolute top-20 right-4 glass rounded-lg p-3 text-xs text-white/60 z-50">
-              Card {currentIndex + 1} of {filteredUsers.length}
+              </div>
             </div>
 
-            <AnimatePresence mode="wait">
-              {currentIndex < filteredUsers.length ? (
-                <motion.div
-                  key={filteredUsers[currentIndex].id}
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  className="relative"
+            <div className="border-t border-white/10 pt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/80">Show online only</span>
+                <button
+                  onClick={() => setOnlineOnly((prev) => !prev)}
+                  className={`w-12 h-6 rounded-full p-1 ${
+                    onlineOnly ? 'bg-white' : 'bg-white/20'
+                  }`}
                 >
-                  {/* Debug card info */}
-                  <div className="absolute top-0 left-0 z-50 glass rounded-lg p-2 text-xs text-white">
-                    {filteredUsers[currentIndex].name}
-                  </div>
-
-                  <SwipeCard
-                    user={filteredUsers[currentIndex]}
-                    onSwipe={handleSwipe}
+                  <span
+                    className={`block h-4 w-4 rounded-full bg-black transition-transform ${
+                      onlineOnly ? 'translate-x-6' : ''
+                    }`}
                   />
-                  
-                  {/* Stack preview */}
-                  {currentIndex + 1 < filteredUsers.length && (
-                    <div className="absolute top-4 left-4 -z-10 w-full h-full glass rounded-3xl opacity-50 transform rotate-3" />
-                  )}
-                  {currentIndex + 2 < filteredUsers.length && (
-                    <div className="absolute top-8 left-8 -z-20 w-full h-full glass rounded-3xl opacity-30 transform rotate-6" />
-                  )}
-                </motion.div>
-              ) : (
+                </button>
+              </div>
+              <p className="text-xs text-white/50">
+                Filtering only changes what you see. Others can still find you.
+              </p>
+            </div>
+
+            <div className="border-t border-white/10 pt-6 space-y-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-white/40">Queue info</p>
+              <p className="text-2xl font-semibold text-white">
+                {Math.max(filteredUsers.length - currentIndex, 0)} profiles
+              </p>
+              <p className="text-sm text-white/60">
+                Boost discover to add curated people to your swipe queue.
+              </p>
+            </div>
+
+            <button
+              onClick={() => navigate('/projects')}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 py-3 text-sm text-white hover:bg-white/20"
+            >
+              <Compass className="w-4 h-4" />
+              Explore briefs
+            </button>
+          </aside>
+
+          <section className="panel p-0 min-h-[520px] overflow-hidden">
+            {loading ? (
+              <div className="flex h-[520px] items-center justify-center">
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-20"
-                >
-                  <div className="text-6xl mb-4">🎯</div>
-                  <h3 className="text-2xl font-bold text-white mb-2">No more profiles!</h3>
-                  <p className="text-white/60 mb-6">Check back later for new matches</p>
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
+                  className="w-14 h-14 border-4 border-white/10 border-t-white rounded-full"
+                />
+              </div>
+            ) : error ? (
+              <div className="flex h-[520px] flex-col items-center justify-center text-center px-6 space-y-3">
+                <Filter className="w-6 h-6 text-white/50" />
+                <p className="text-white font-semibold">Unable to load discover</p>
+                <p className="text-white/60 text-sm">{error}</p>
+                {authIssue ? (
+                  <>
+                    <p className="text-xs text-white/50">
+                      Your session might have expired. Log back in to refresh your credentials.
+                    </p>
+                    <button
+                      onClick={() => navigate('/login?redirect=/discover')}
+                      className="px-5 py-2 text-sm rounded-full bg-white text-black"
+                    >
+                      Re-authenticate
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={() => setCurrentIndex(0)}
-                    className="px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
+                    onClick={() => setMode((prev) => (prev === 'online' ? 'nearby' : 'online'))}
+                    className="px-5 py-2 text-sm rounded-full bg-white text-black"
                   >
-                    Start Over
+                    Try again
                   </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+                )}
+              </div>
+            ) : viewMode === 'map' ? (
+              <div className="relative h-[520px]">
+                <MapsView
+                  users={mapFriendlyUsers as any}
+                  center={
+                    userLocation
+                      ? { lat: userLocation.lat, lng: userLocation.lon }
+                      : { lat: -6.2088, lng: 106.8456 }
+                  }
+                  radius={radius}
+                  onUserClick={(user) => {
+                    const idx = filteredUsers.findIndex((u) => u.id === user.id);
+                    if (idx >= 0) {
+                      setCurrentIndex(idx);
+                      setViewMode('cards');
+                    }
+                  }}
+                />
+                {filteredUsers.length === 0 && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                    <p className="text-white font-semibold mb-2">No collaborators plotted</p>
+                    <p className="text-white/60 text-sm mb-4">
+                      Relax your filters or increase the radius to start seeing folks on the map.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setOnlineOnly(false);
+                        setRadius(25);
+                      }}
+                      className="px-5 py-2 text-sm rounded-full bg-white text-black"
+                    >
+                      Reset filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="flex h-[520px] flex-col items-center justify-center text-center px-6">
+                <p className="text-white font-semibold mb-2">No collaborators found</p>
+                <p className="text-white/60 text-sm mb-4">
+                  Relax your filters or increase the radius to see more people.
+                </p>
+                <button
+                  onClick={() => {
+                    setOnlineOnly(false);
+                    setRadius(25);
+                  }}
+                  className="px-5 py-2 text-sm rounded-full bg-white text-black"
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4 p-6">
+                {filteredUsers.slice(currentIndex, currentIndex + 6).map((user) => (
+                  <DiscoverCard
+                    key={user.id}
+                    user={user}
+                    onSave={() => handleSwipe('save')}
+                    onSkip={() => handleSwipe('pass')}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
-      {/* Match Modal */}
-      {showMatch && (
+      {showMatch && matchedUser && (
         <MatchModal
-          onClose={() => setShowMatch(false)}
           user={matchedUser}
-          onSendMessage={() => {
-            setShowMatch(false);
-            navigate('/messages');
-          }}
+          onClose={() => setShowMatch(false)}
+          onSendMessage={() => navigate('/chat')}
         />
       )}
     </Layout>
+  );
+};
+
+interface DiscoverCardProps {
+  user: ExtendedUser;
+  onSave: () => void;
+  onSkip: () => void;
+}
+
+const DiscoverCard = ({ user, onSave, onSkip }: DiscoverCardProps) => {
+  const locationLabel =
+    typeof user.location === 'string'
+      ? user.location
+      : user.location?.city || (user.distance ? `${user.distance} km away` : 'Unknown');
+
+  return (
+    <div className="panel p-4 flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <img
+          src={user.avatar}
+          alt={user.name}
+          className="w-12 h-12 rounded-full object-cover border border-white/10"
+        />
+        <div className="flex-1">
+          <p className="text-white font-semibold">{user.name}</p>
+          <p className="text-xs text-white/60">
+            {locationLabel} | {user.matchScore ? `${user.matchScore}% match` : 'New'}
+          </p>
+        </div>
+        {user.isOnline && (
+          <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+            Online
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-white/70 line-clamp-2">{user.bio}</p>
+      <div className="flex flex-wrap gap-2 text-xs text-white/70">
+        {user.skills.slice(0, 4).map((skill) => (
+          <span key={skill} className="px-3 py-1 rounded-full bg-white/5 border border-white/10">
+            {skill}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-3 pt-2 text-sm">
+        <button
+          onClick={onSkip}
+          className="flex-1 rounded-full border border-white/15 py-2 text-white/70 hover:text-white"
+        >
+          Pass
+        </button>
+        <button onClick={onSave} className="flex-1 rounded-full bg-white text-black py-2 font-medium">
+          Save
+        </button>
+      </div>
+    </div>
   );
 };

@@ -2,187 +2,203 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { LandingNavbar } from '../components/LandingNavbar';
 
+const features = [
+  {
+    title: 'Smart matching',
+    description:
+      'Skills, goals, and availability are combined so you only meet collaborators that fit your flow.',
+  },
+  {
+    title: 'Live discovery',
+    description:
+      'Switch between nearby makers or async discovery without leaving the map experience.',
+  },
+  {
+    title: 'Trust-first',
+    description:
+      'Verified profiles, visible scores, and gentle nudges keep the community respectful and focused.',
+  },
+];
+
+const steps = [
+  {
+    title: 'Create your profile',
+    description: 'Share your craft, highlight tools you love, and drop a short availability note.',
+  },
+  {
+    title: 'Discover & swipe',
+    description: 'Use map or swipe view to find collaborators. Pin promising matches or start a chat.',
+  },
+  {
+    title: 'Ship together',
+    description:
+      'Spin up project rooms, share files, track sessions, and let the platform remind you of next steps.',
+  },
+];
+
+const trust = [
+  { title: 'Verified profiles', copy: 'Document + selfie check before first collaboration.' },
+  { title: 'Conversation health', copy: 'Smart moderation flags keep DMs positive.' },
+  { title: 'Transparent reviews', copy: 'End of project feedback raises real stars, not vanity points.' },
+  { title: 'Fast support', copy: 'Humans on standby whenever you need to report or pause a chat.' },
+];
+
 export const Landing = () => {
   return (
-    <div className="min-h-screen bg-white text-black overflow-x-hidden">
+    <div className="relative min-h-screen text-[var(--color-text)]">
       <LandingNavbar />
-      
-
-      {/* Hero Section - Apple Style */}
-      <section className="min-h-screen flex flex-col items-center justify-center px-4 py-20 pt-24">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="text-center max-w-4xl mx-auto"
-        >
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="flex justify-center mb-8"
-          >
-            <img 
-              src="/logo/blacklogo.png" 
-              alt="Alivv Logo" 
-              className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 object-contain"
-            />
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold mb-6 tracking-tight"
-          >
-            Alivv
-          </motion.h1>
-
-          {/* Tagline */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="text-xl sm:text-2xl md:text-3xl text-gray-600 mb-12 px-4"
-          >
-            Connect with creative minds.<br className="sm:hidden" /> Build something amazing.
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center px-4"
-          >
-            <Link to="/register" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-8 py-3 bg-black text-white rounded-full text-lg font-medium hover:bg-gray-800 transition-colors">
-                Get Started
-              </button>
-            </Link>
-            <Link to="/login" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-8 py-3 border-2 border-black text-black rounded-full text-lg font-medium hover:bg-gray-50 transition-colors">
-                Sign In
-              </button>
-            </Link>
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-12"
-          >
-            <FeatureCard
-              title="Smart Matching"
-              description="AI-powered compatibility that connects you with the right collaborators based on skills, interests, and goals."
-            />
-            <FeatureCard
-              title="Discover Nearby"
-              description="Find talented professionals online or in your area with intelligent location-based search."
-            />
-            <FeatureCard
-              title="Verified & Secure"
-              description="Trust scores and verified profiles ensure you're connecting with real, professional creatives."
-            />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Learn Section */}
-      <section id="learn" className="py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-semibold mb-6">
-              Learn & Grow
-            </h2>
-            <p className="text-xl text-gray-600 mb-8 px-4">
-              Discover resources, tutorials, and best practices to maximize your collaboration experience. 
-              Connect with mentors, join workshops, and access exclusive content designed to help you succeed.
-            </p>
-            <Link to="/register">
-              <button className="px-8 py-3 bg-black text-white rounded-full text-lg font-medium hover:bg-gray-800 transition-colors">
-                Start Learning
-              </button>
-            </Link>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Safety Section */}
-      <section id="safety" className="py-20 px-4 bg-gray-50">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-semibold mb-6">
-              Your Safety Matters
-            </h2>
-            <p className="text-xl text-gray-600 mb-8 px-4">
-              We prioritize your security and privacy. All profiles are verified, communications are monitored 
-              for safety, and our trust score system helps you make informed decisions about who to collaborate with.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto mt-12">
-              <div className="p-6 bg-white rounded-2xl">
-                <h3 className="text-lg font-semibold mb-2">Verified Profiles</h3>
-                <p className="text-gray-600">Every user goes through identity verification</p>
-              </div>
-              <div className="p-6 bg-white rounded-2xl">
-                <h3 className="text-lg font-semibold mb-2">Trust Scores</h3>
-                <p className="text-gray-600">Transparent ratings from real collaborations</p>
-              </div>
-              <div className="p-6 bg-white rounded-2xl">
-                <h3 className="text-lg font-semibold mb-2">Secure Messaging</h3>
-                <p className="text-gray-600">End-to-end encrypted communications</p>
-              </div>
-              <div className="p-6 bg-white rounded-2xl">
-                <h3 className="text-lg font-semibold mb-2">24/7 Support</h3>
-                <p className="text-gray-600">Our team is always here to help</p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="py-12 px-4 border-t border-gray-200">
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-gray-500 text-sm">
-            © 2025 Alivv. All rights reserved.
-          </p>
-        </div>
-      </footer>
+      <main className="pt-28 pb-16 space-y-20">
+        <Hero />
+        <FeatureGrid />
+        <HowItWorks />
+        <Safety />
+        <Footer />
+      </main>
     </div>
   );
 };
 
-interface FeatureCardProps {
-  title: string;
-  description: string;
-}
-
-const FeatureCard = ({ title, description }: FeatureCardProps) => {
-  return (
+const Hero = () => (
+  <section className="shell-content flex flex-col items-center text-center gap-10">
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      className="text-center"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="flex flex-col items-center gap-6 w-full"
     >
-      <h3 className="text-2xl font-semibold mb-4">{title}</h3>
-      <p className="text-gray-600 leading-relaxed">{description}</p>
+      <span className="pill text-[var(--color-text-muted)]">
+        <span className="w-2 h-2 rounded-full bg-[var(--color-highlight)] block" />
+        Collaboration, simplified
+      </span>
+      <h1 className="text-4xl sm:text-5xl md:text-6xl font-semibold tracking-tight">
+        Meet collaborators you can actually build with.
+      </h1>
+      <p className="max-w-2xl text-lg text-[var(--color-text-muted)]">
+        Alivv pairs smart discovery with gentle structure so every chat moves toward a real project.
+        Keep everything in one calm workspace, no chaos required.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto justify-center">
+        <Link
+          to="/register"
+          className="inline-flex justify-center items-center rounded-full px-8 py-3 bg-white text-black font-semibold shadow-[0_20px_40px_rgba(15,23,42,0.35)] hover:-translate-y-0.5"
+        >
+          Get started
+        </Link>
+        <Link
+          to="/login"
+          className="inline-flex justify-center items-center rounded-full px-8 py-3 border border-white/30 text-white font-semibold hover:bg-white/5"
+        >
+          I already have an account
+        </Link>
+      </div>
     </motion.div>
-  );
-};
+    <div className="panel subtle-grid w-full max-w-5xl mx-auto p-6 sm:p-10 text-left">
+      <p className="text-base sm:text-lg text-[var(--color-text-muted)] leading-relaxed">
+        <span className="text-white font-semibold">&ldquo;</span>Two weeks into private beta we matched
+        over 280 creatives into projects with real deliverables. No job boards, just thoughtful
+        intros and a calm chat space.<span className="text-white font-semibold">&rdquo;</span>
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+        {[
+          { label: 'Successful matches', value: '280+' },
+          { label: 'Avg. reply time', value: '12 min' },
+          { label: 'Verified creators', value: '3.5k' },
+          { label: 'Active countries', value: '26' },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-2xl border border-white/5 p-4">
+            <p className="text-2xl font-semibold">{stat.value}</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+const FeatureGrid = () => (
+  <section className="shell-content space-y-10" id="learn">
+    <div className="section-heading">
+      <span>Why Alivv</span>
+      <h2>Design-led tools for intentional collabs.</h2>
+    </div>
+    <div className="grid gap-6 md:grid-cols-3">
+      {features.map((feature) => (
+        <motion.div
+          key={feature.title}
+          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          viewport={{ once: true }}
+          className="panel p-6 subtle-grid"
+        >
+          <p className="text-sm uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-3">
+            {feature.title}
+          </p>
+          <p className="text-lg leading-relaxed text-[var(--color-text-muted)]">{feature.description}</p>
+        </motion.div>
+      ))}
+    </div>
+  </section>
+);
+
+const HowItWorks = () => (
+  <section className="shell-content space-y-10" id="safety">
+    <div className="section-heading">
+      <span>Flow</span>
+      <h2>Start light, stay organized, move forward.</h2>
+    </div>
+    <div className="grid gap-6 md:grid-cols-3">
+      {steps.map((step, idx) => (
+        <motion.div
+          key={step.title}
+          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          transition={{ delay: idx * 0.05 }}
+          viewport={{ once: true }}
+          className="panel p-6 flex flex-col gap-4"
+        >
+          <span className="pill w-fit bg-white/10 border-white/20 text-white">
+            Step {idx + 1}
+          </span>
+          <h3 className="text-xl font-semibold">{step.title}</h3>
+          <p className="text-[var(--color-text-muted)]">{step.description}</p>
+        </motion.div>
+      ))}
+    </div>
+  </section>
+);
+
+const Safety = () => (
+  <section className="shell-content space-y-10">
+    <div className="section-heading">
+      <span>Trust</span>
+      <h2>Safety built into every message.</h2>
+    </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      {trust.map((item) => (
+        <motion.div
+          key={item.title}
+          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 16 }}
+          viewport={{ once: true }}
+          className="panel p-5"
+        >
+          <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
+          <p className="text-[var(--color-text-muted)] text-sm">{item.copy}</p>
+        </motion.div>
+      ))}
+    </div>
+  </section>
+);
+
+const Footer = () => (
+  <footer className="shell-content pt-10 border-t border-white/5">
+    <div className="flex flex-col gap-3 text-center text-[var(--color-text-muted)] text-sm">
+      <p>&copy; {new Date().getFullYear()} Alivv. Built for founders, strategists, and multi-hyphenates.</p>
+      <div className="flex flex-wrap justify-center gap-4 uppercase tracking-[0.2em] text-xs">
+        <span>Privacy</span>
+        <span>Security</span>
+        <span>Community</span>
+      </div>
+    </div>
+  </footer>
+);

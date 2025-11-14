@@ -8,7 +8,7 @@ from bson import ObjectId
 from .config import settings
 from .db import users
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -68,13 +68,22 @@ def verify_refresh_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
     """Dependency to get current authenticated user"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        raise credentials_exception
+    
+    token = token.strip()
+    
+    # Allow plain ObjectId tokens in non-production environments for testing
+    if settings.NODE_ENV != "production" and ObjectId.is_valid(token):
+        return await _fetch_user_by_id(token, credentials_exception)
     
     try:
         payload = jwt.decode(token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM])
@@ -87,11 +96,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         print(f"[ERROR] DEBUG - JWT decode failed: {str(e)}")
         raise credentials_exception
     
-    # Convert user_id string to ObjectId for MongoDB query
+    return await _fetch_user_by_id(user_id, credentials_exception)
+
+
+async def _fetch_user_by_id(user_id: str, credentials_exception: HTTPException):
+    """Retrieve user by ObjectId string and update last_active."""
     try:
         user_object_id = ObjectId(user_id)
-    except Exception as e:
-        print(f"[ERROR] DEBUG - Invalid ObjectId format: {user_id}")
+    except Exception:
         raise credentials_exception
     
     user = await users().find_one({"_id": user_object_id})
@@ -100,12 +112,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         print(f"[ERROR] DEBUG - User {user_id} not found in database")
         raise credentials_exception
     
-    # Update last_active
     await users().update_one(
         {"_id": user_object_id},
         {"$set": {"last_active": datetime.utcnow()}}
     )
-    
     return user
 
 

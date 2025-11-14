@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 from ..config import settings
 from ..db import get_db
 from ..auth import get_current_user, oauth2_scheme, create_access_token, create_refresh_token, verify_access_token, verify_refresh_token
+from .profile import is_profile_complete
 from ..oauth_providers import get_oauth_user_info
 from ..email_utils import send_verification_email  # NEW: Email sending
 from slowapi import Limiter
@@ -457,7 +458,7 @@ async def login_options(request: Request):
     response.headers["Access-Control-Max-Age"] = "3600"
     return response
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=dict)  # Changed to dict to allow custom response format
 @limiter.limit("5/minute")
 async def login(request: Request, response: Response, credentials: LoginRequest):
     """
@@ -561,6 +562,20 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         # Get profile completion status
         profile = await get_db().profiles.find_one({"userId": user_id})
         profile_complete = profile.get("profileComplete", False) if profile else False
+
+        # Auto-heal legacy profiles that already have required fields filled out
+        if profile and not profile_complete and is_profile_complete(profile):
+            profile_complete = True
+            await get_db().profiles.update_one(
+                {"_id": profile["_id"]},
+                {
+                    "$set": {
+                        "profileComplete": True,
+                        "completionScore": 100,
+                        "updatedAt": datetime.utcnow()
+                    }
+                }
+            )
         
         # Set refresh token in httpOnly cookie
         response.set_cookie(
@@ -573,10 +588,19 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             path="/auth"
         )
         
+        # Return response with user data and profileComplete (frontend expects this format)
         return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "expires_in": 900
+            "accessToken": access_token,  # camelCase for frontend
+            "refreshToken": refresh_token,  # Include in response body
+            "tokenType": "bearer",
+            "expiresIn": 900,
+            "user": {
+                "id": user_id,
+                "email": user["email"],
+                "name": user.get("name", ""),
+                "emailVerified": user.get("emailVerified", False),
+                "profileComplete": profile_complete  # CRITICAL: Frontend needs this for redirect logic
+            }
         }
         
     except HTTPException:

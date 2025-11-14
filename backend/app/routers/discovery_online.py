@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 from bson import ObjectId
 import logging
 
-from ..auth import get_current_user
-from ..db import get_db
+from ..auth import get_current_user, oauth2_scheme
+from .. import db
 
 router = APIRouter(prefix="/discover", tags=["Discovery"])
 logger = logging.getLogger(__name__)
@@ -81,6 +81,22 @@ class OnlineUsersResponse(BaseModel):
                 "field_filter": "Photography"
             }
         }
+
+
+async def _get_current_user_dependency(
+    token: Optional[str] = Depends(oauth2_scheme)
+) -> dict:
+    """Wrap auth dependency so tests can patch get_current_user."""
+    try:
+        return await get_current_user(token=token)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"[WARN] Auth dependency error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
 
 
 # ===== COMPATIBILITY CALCULATION =====
@@ -177,7 +193,7 @@ def format_user_response(user: dict, compatibility: int) -> OnlineUserResponse:
 async def discover_online_users(
     field: Optional[str] = Query(None, description="Filter by creative field (e.g., 'Photography')"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of results"),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
     Discover compatible online users for collaboration
@@ -210,7 +226,7 @@ async def discover_online_users(
         swiped_user_ids = set()
         try:
             # Find all swipes by current user (both left and right)
-            swipes_cursor = get_db().swipes.find(
+            swipes_cursor = db.swipes().find(
                 {"userId": current_user_id},
                 {"swipedUserId": 1}
             )
@@ -241,7 +257,7 @@ async def discover_online_users(
             }
         
         # ===== STEP 3: FETCH ONLINE USERS =====
-        users_cursor = get_db().users.find(query_filters).limit(limit * 2)  # Fetch extra for sorting
+        users_cursor = db.users().find(query_filters).limit(limit * 2)  # Fetch extra for sorting
         
         online_users = []
         async for user in users_cursor:
@@ -302,7 +318,7 @@ async def discover_online_users(
 
 @router.get("/stats")
 async def get_discovery_stats(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
     Get discovery statistics for current user
@@ -316,7 +332,7 @@ async def get_discovery_stats(
         current_user_id = current_user['_id']
         
         # Count total online users (excluding current user)
-        total_online = await get_db().users.count_documents({
+        total_online = await db.users().count_documents({
             "isOnline": True,
             "_id": {"$ne": current_user_id}
         })
@@ -341,13 +357,13 @@ async def get_discovery_stats(
         ]
         
         by_field = {}
-        async for doc in get_db().users.aggregate(pipeline):
+        async for doc in db.users().aggregate(pipeline):
             field_name = doc['_id'] or 'Unknown'
             by_field[field_name] = doc['count']
         
         # Calculate average compatibility (sample of 10 users)
         sample_users = []
-        async for user in get_db().users.find(
+        async for user in db.users().find(
             {"isOnline": True, "_id": {"$ne": current_user_id}}
         ).limit(10):
             sample_users.append(user)

@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { Layout } from '../components/Layout';
+
+const inputClasses =
+  'w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/50 focus:outline-none';
 
 export const SetupProfile = () => {
   const navigate = useNavigate();
@@ -18,71 +22,41 @@ export const SetupProfile = () => {
   const [loading, setLoading] = useState(false);
 
   const addSkill = () => {
-    if (skillInput.trim() && !skills.includes(skillInput.trim())) {
+    if (skillInput.trim() && !skills.includes(skillInput.trim()) && skills.length < 6) {
       setSkills([...skills, skillInput.trim()]);
       setSkillInput('');
     }
   };
 
-  const removeSkill = (skill: string) => {
-    setSkills(skills.filter(s => s !== skill));
-  };
+  const removeSkill = (skill: string) => setSkills(skills.filter((s) => s !== skill));
 
   const addInterest = () => {
-    if (interestInput.trim() && !interests.includes(interestInput.trim())) {
+    if (interestInput.trim() && !interests.includes(interestInput.trim()) && interests.length < 6) {
       setInterests([...interests, interestInput.trim()]);
       setInterestInput('');
     }
   };
 
-  const removeInterest = (interest: string) => {
-    setInterests(interests.filter(i => i !== interest));
-  };
+  const removeInterest = (interest: string) => setInterests(interests.filter((i) => i !== interest));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!name.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-
-    if (!birthdate) {
-      setError('Please enter your birthdate');
-      return;
-    }
-
-    if (!bio.trim()) {
-      setError('Please write a short bio about yourself');
-      return;
-    }
-
-    if (skills.length === 0) {
-      setError('Please add at least one skill');
-      return;
-    }
-
-    if (interests.length === 0) {
-      setError('Please add at least one interest');
-      return;
-    }
-
-    if (photos.length === 0) {
-      setError('Please upload at least one photo');
-      return;
-    }
+    if (!name.trim()) return setError('Please enter your name.');
+    if (!birthdate) return setError('Please enter your birthdate.');
+    if (!bio.trim()) return setError('Please write a short bio.');
+    if (!skills.length) return setError('Add at least one skill.');
+    if (!interests.length) return setError('Add at least one interest.');
+    if (!photos.length) return setError('Upload at least one photo.');
 
     setLoading(true);
 
     try {
-      // Calculate age from birthdate
       const age = new Date().getFullYear() - new Date(birthdate).getFullYear();
-
-      // Update profile via API
       const token = api.getToken();
       if (!token) {
-        setError('Not authenticated. Please log in again.');
+        setError('Please log in again.');
         navigate('/login');
         return;
       }
@@ -91,7 +65,7 @@ export const SetupProfile = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: name.trim(),
@@ -100,8 +74,8 @@ export const SetupProfile = () => {
           skills,
           interests,
           goals: goals.trim(),
-          photos
-        })
+          photos,
+        }),
       });
 
       if (!response.ok) {
@@ -109,7 +83,6 @@ export const SetupProfile = () => {
         throw new Error(data.detail || 'Failed to update profile');
       }
 
-      // Mark profile as complete and redirect to discover
       navigate('/discover');
     } catch (err: any) {
       setError(err.message || 'Failed to update profile. Please try again.');
@@ -119,286 +92,254 @@ export const SetupProfile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-2xl"
-      >
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl sm:text-6xl font-semibold text-black mb-4">
-            Alliv
-          </h1>
-          <h2 className="text-2xl sm:text-3xl font-semibold text-black mb-2">
-            Complete Your Profile
-          </h2>
-          <p className="text-gray-600">
-            Tell us about yourself to find the best matches
-          </p>
-        </div>
+    <Layout showNavbar={false} showMobileChrome={false} padded={false}>
+      <div className="min-h-screen pt-24 pb-16 px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-5xl mx-auto space-y-10"
+        >
+          <section className="panel p-6 sm:p-8 text-center space-y-4">
+            <span className="pill mx-auto text-white/70">
+              <span className="w-2 h-2 rounded-full bg-[var(--color-highlight)] block" />
+              Profile setup
+            </span>
+            <h1 className="text-3xl font-semibold text-white">
+              Give collaborators a snapshot of how you build.
+            </h1>
+            <p className="text-white/70 text-sm sm:text-base max-w-3xl mx-auto">
+              We ask for the essentials—story, skills, interests, and a few photos—so we can introduce you to
+              the right people faster.
+            </p>
+          </section>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200">
           {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"
-            >
+            <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               {error}
-            </motion.div>
+            </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name *
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                placeholder="Enter your full name"
-                required
-              />
-            </div>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="panel p-6 sm:p-8">
+            <form onSubmit={handleSubmit} className="space-y-8 text-white">
+              <div className="grid gap-6 md:grid-cols-2">
+                <Field label="Full name *" description="Keep it personal—use your real name.">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={inputClasses}
+                    placeholder="e.g., Alex Carter"
+                  />
+                </Field>
+                <Field label="Birthdate *">
+                  <input
+                    type="date"
+                    value={birthdate}
+                    onChange={(e) => setBirthdate(e.target.value)}
+                    className={inputClasses}
+                  />
+                </Field>
+              </div>
 
-            {/* Birthdate */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Birthdate *
-              </label>
-              <input
-                type="date"
-                value={birthdate}
-                onChange={(e) => setBirthdate(e.target.value)}
-                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                You must be at least 18 years old
-              </p>
-            </div>
-
-            {/* Bio */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bio *
-              </label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all resize-none"
-                placeholder="Tell us about yourself, your background, and what you're passionate about..."
-                rows={4}
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Write a brief introduction about yourself
-              </p>
-            </div>
-
-            {/* Skills */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Skills *
-              </label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={skillInput}
-                  onChange={(e) => setSkillInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
-                  className="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                  placeholder="e.g., React, Python, Design, Marketing..."
+              <Field label="Short bio *" description="Share what drives you or how you like to collaborate.">
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={4}
+                  className={`${inputClasses} resize-none`}
+                  placeholder="Lead product designer turned indie filmmaker..."
                 />
-                <button
-                  type="button"
-                  onClick={addSkill}
-                  className="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors"
-                >
-                  Add
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white rounded-full text-sm"
-                  >
-                    {skill}
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(skill)}
-                      className="hover:text-red-300 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              {skills.length === 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Add at least one skill
-                </p>
-              )}
-            </div>
+              </Field>
 
-            {/* Interests */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Interests *
-              </label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={interestInput}
-                  onChange={(e) => setInterestInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addInterest())}
-                  className="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                  placeholder="e.g., AI, Startups, Music, Sports..."
-                />
-                <button
-                  type="button"
-                  onClick={addInterest}
-                  className="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors"
-                >
-                  Add
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {interests.map((interest) => (
-                  <span
-                    key={interest}
-                    className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 text-black rounded-full text-sm"
-                  >
-                    {interest}
-                    <button
-                      type="button"
-                      onClick={() => removeInterest(interest)}
-                      className="hover:text-red-500 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              {interests.length === 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Add at least one interest
-                </p>
-              )}
-            </div>
-
-            {/* Goals */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Goals (Optional)
-              </label>
-              <textarea
-                value={goals}
-                onChange={(e) => setGoals(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all resize-none"
-                placeholder="What are you looking to achieve? What projects or collaborations interest you?"
-                rows={3}
+              <SectionWithTags
+                label="Skills *"
+                description="Highlight up to six tools or disciplines you lead with."
+                inputValue={skillInput}
+                onInputChange={setSkillInput}
+                items={skills}
+                onAdd={addSkill}
+                onRemove={removeSkill}
+                placeholder="Add a skill (e.g., React, Sound Design)"
+                isError={skills.length === 0}
               />
-              <p className="mt-1 text-xs text-gray-500">
-                Share what you're hoping to accomplish
-              </p>
-            </div>
 
-            {/* Photo Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Profile Photos * (At least 1, max 6)
-              </label>
-              <div className="grid grid-cols-3 gap-4">
-                {[...Array(6)].map((_, index) => (
-                  <div
-                    key={index}
-                    className="aspect-square bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center hover:border-black transition-colors cursor-pointer relative overflow-hidden"
-                  >
-                    {photos[index] ? (
-                      <>
-                        <img
-                          src={photos[index]}
-                          alt={`Profile ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newPhotos = [...photos];
-                            newPhotos.splice(index, 1);
-                            setPhotos(newPhotos);
-                          }}
-                          className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors flex items-center justify-center"
-                        >
-                          ×
-                        </button>
-                      </>
-                    ) : (
-                      <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-                        <svg className="w-8 h-8 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span className="text-xs text-gray-500">Add Photo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file && photos.length < 6) {
-                              // Create data URL for preview
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setPhotos([...photos, reader.result as string]);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {photos.length === 0 && (
-                <p className="mt-2 text-xs text-red-500">
-                  Please upload at least one photo
+              <SectionWithTags
+                label="Interests *"
+                description="Let people know what themes you’re exploring right now."
+                inputValue={interestInput}
+                onInputChange={setInterestInput}
+                items={interests}
+                onAdd={addInterest}
+                onRemove={removeInterest}
+                placeholder="Add an interest (e.g., Climate tech, Storytelling)"
+                isError={interests.length === 0}
+              />
+
+              <Field label="Goals (optional)" description="Mention the type of collaborations you’re seeking.">
+                <textarea
+                  value={goals}
+                  onChange={(e) => setGoals(e.target.value)}
+                  rows={3}
+                  className={`${inputClasses} resize-none`}
+                  placeholder="Looking to join a nimble team shipping health tools..."
+                />
+              </Field>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-white/80">
+                  Profile photos * <span className="text-white/50">(at least one, max six)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, index) => (
+                    <div
+                      key={index}
+                      className="aspect-square rounded-2xl border-2 border-dashed border-white/15 bg-white/5 flex items-center justify-center relative overflow-hidden"
+                    >
+                      {photos[index] ? (
+                        <>
+                          <img src={photos[index]} alt={`Profile ${index + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...photos];
+                              next.splice(index, 1);
+                              setPhotos(next);
+                            }}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs"
+                          >
+                            ×
+                          </button>
+                        </>
+                      ) : (
+                        <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-white/60 text-sm">
+                          <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file && photos.length < 6) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => setPhotos([...photos, reader.result as string]);
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {photos.length === 0 && (
+                  <p className="text-xs text-red-300">Please upload at least one photo.</p>
+                )}
+                <p className="text-xs text-white/50">
+                  Choose images that show your craft, workspace, or personality.
                 </p>
-              )}
-              <p className="mt-2 text-xs text-gray-500">
-                Upload photos that best represent you and your work
-              </p>
-            </div>
+              </div>
 
-            {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-2xl bg-white text-black font-semibold py-3 disabled:opacity-60 disabled:cursor-not-allowed hover:-translate-y-0.5 transition-transform"
+              >
+                {loading ? 'Saving...' : 'Complete profile'}
+              </button>
+            </form>
+          </motion.div>
+
+          <div className="text-center">
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              onClick={() => navigate('/discover')}
+              className="text-sm text-white/70 hover:text-white underline underline-offset-4"
             >
-              {loading ? 'Saving...' : 'Complete Profile'}
+              Skip for now (finish later)
             </button>
-          </form>
-        </div>
-
-        {/* Skip Link */}
-        <div className="text-center mt-6">
-          <button
-            onClick={() => navigate('/discover')}
-            className="text-gray-600 hover:text-black transition-colors text-sm"
-          >
-            Skip for now (you can complete this later)
-          </button>
-        </div>
-      </motion.div>
-    </div>
+          </div>
+        </motion.div>
+      </div>
+    </Layout>
   );
 };
+
+interface FieldProps {
+  label: string;
+  description?: string;
+  children: ReactNode;
+}
+
+const Field = ({ label, description, children }: FieldProps) => (
+  <div className="space-y-2">
+    <label className="text-sm font-medium text-white/80">{label}</label>
+    {children}
+    {description && <p className="text-xs text-white/50">{description}</p>}
+  </div>
+);
+
+interface SectionWithTagsProps {
+  label: string;
+  description: string;
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  items: string[];
+  onAdd: () => void;
+  onRemove: (value: string) => void;
+  placeholder: string;
+  isError?: boolean;
+}
+
+const SectionWithTags = ({
+  label,
+  description,
+  inputValue,
+  onInputChange,
+  items,
+  onAdd,
+  onRemove,
+  placeholder,
+  isError,
+}: SectionWithTagsProps) => (
+  <div className="space-y-2">
+    <label className="text-sm font-medium text-white/80">{label}</label>
+    <div className="flex flex-col gap-3 sm:flex-row">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => onInputChange(e.target.value)}
+        className={`${inputClasses} flex-1`}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        onClick={onAdd}
+        className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/20"
+      >
+        Add
+      </button>
+    </div>
+    <p className="text-xs text-white/50">{description}</p>
+    <div className="flex flex-wrap gap-2">
+      {items.map((value) => (
+        <span
+          key={value}
+          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white"
+        >
+          {value}
+          <button
+            type="button"
+            onClick={() => onRemove(value)}
+            className="text-white/70 hover:text-white"
+            aria-label={`Remove ${value}`}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+    </div>
+    {isError && <p className="text-xs text-red-300">Add at least one item.</p>}
+  </div>
+);

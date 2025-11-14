@@ -1,29 +1,25 @@
 """
 Comprehensive test suite for Swipe System
-Tests all swipe scenarios including match detection
+Tests all swipe scenarios termasuk match detection
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from datetime import datetime
 from bson import ObjectId
 
 from app.main import app
-from app.db import get_db
 
 
 # ===== TEST DATA =====
 
-@pytest.fixture
-async def test_users():
-    """Create test users for swipe testing"""
-    db = get_db()
-    
-    # Clear test data
+@pytest_asyncio.fixture
+async def test_users(db):
+    """Create test users untuk pengujian swipe"""
     await db.users.delete_many({"email": {"$regex": "^test_swipe_"}})
     await db.swipes.delete_many({})
     await db.matches.delete_many({})
     
-    # Create test users
     users_data = [
         {
             "email": "test_swipe_user1@test.com",
@@ -69,22 +65,21 @@ async def test_users():
     result = await db.users.insert_many(users_data)
     user_ids = [str(uid) for uid in result.inserted_ids]
     
-    yield {
-        "user1": user_ids[0],
-        "user2": user_ids[1],
-        "user3": user_ids[2]
-    }
-    
-    # Cleanup
-    await db.users.delete_many({"email": {"$regex": "^test_swipe_"}})
-    await db.swipes.delete_many({})
-    await db.matches.delete_many({})
+    try:
+        yield {
+            "user1": user_ids[0],
+            "user2": user_ids[1],
+            "user3": user_ids[2]
+        }
+    finally:
+        await db.users.delete_many({"email": {"$regex": "^test_swipe_"}})
+        await db.swipes.delete_many({})
+        await db.matches.delete_many({})
 
 
 @pytest.fixture
 def mock_auth_token(test_users):
-    """Mock authentication token"""
-    # TODO: Replace with actual JWT token generation
+    """Token auth sederhana memakai user1"""
     return test_users["user1"]
 
 
@@ -160,10 +155,8 @@ class TestSwipeActions:
 class TestMatchDetection:
     """Test automatic match creation when mutual likes occur"""
     
-    async def test_mutual_like_creates_match(self, test_users):
+    async def test_mutual_like_creates_match(self, test_users, db):
         """Test that mutual like creates a match"""
-        db = get_db()
-        
         # User1 likes User2 (no match yet)
         async with AsyncClient(app=app, base_url="http://test") as client:
             response1 = await client.post(
@@ -555,10 +548,8 @@ class TestUndoSwipe:
 class TestSwipeIntegration:
     """Test complete swipe flows"""
     
-    async def test_complete_match_flow(self, test_users):
+    async def test_complete_match_flow(self, test_users, db):
         """Test complete flow: swipe -> match -> stats"""
-        db = get_db()
-        
         async with AsyncClient(app=app, base_url="http://test") as client:
             # User1 likes User2
             response1 = await client.post(

@@ -3,6 +3,10 @@ import { Match } from '../types/match';
 import { Message } from '../types/message';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const TOKEN_STORAGE_KEY = 'auth_token';
+const ACCESS_TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_STORAGE_KEY = 'auth_user';
 
 // Mock data for development
 const mockUsers: User[] = [
@@ -10,7 +14,7 @@ const mockUsers: User[] = [
     id: '1',
     name: 'Sarah Chen',
     age: 24,
-    bio: 'UI/UX Designer • Building the future of design systems • Coffee enthusiast ☕',
+    bio: 'UI/UX designer building the future of design systems. Coffee enthusiast.',
     avatar: 'https://i.pravatar.cc/400?img=1',
     skills: ['Figma', 'Adobe XD', 'Design Systems', 'Prototyping'],
     interests: ['Art', 'Tech', 'Coffee'],
@@ -20,7 +24,7 @@ const mockUsers: User[] = [
     id: '2',
     name: 'Marcus Rodriguez',
     age: 28,
-    bio: 'Full-stack Developer • Open source contributor • AI enthusiast 🤖',
+    bio: 'Full-stack developer and open source contributor who loves AI.',
     avatar: 'https://i.pravatar.cc/400?img=12',
     skills: ['React', 'Node.js', 'Python', 'Machine Learning'],
     interests: ['Coding', 'AI', 'Gaming'],
@@ -30,7 +34,7 @@ const mockUsers: User[] = [
     id: '3',
     name: 'Elena Volkov',
     age: 26,
-    bio: 'Product Manager • Ex-Google • Building the next big thing 🚀',
+    bio: 'Product manager, ex-Google, focused on shipping the next big thing.',
     avatar: 'https://i.pravatar.cc/400?img=5',
     skills: ['Product Strategy', 'Agile', 'Data Analysis', 'Leadership'],
     interests: ['Startups', 'Innovation', 'Travel'],
@@ -40,7 +44,7 @@ const mockUsers: User[] = [
     id: '4',
     name: 'James Anderson',
     age: 30,
-    bio: 'DevOps Engineer • Cloud architect • Automation lover ⚡',
+    bio: 'DevOps engineer and cloud architect with an automation mindset.',
     avatar: 'https://i.pravatar.cc/400?img=13',
     skills: ['AWS', 'Docker', 'Kubernetes', 'CI/CD'],
     interests: ['Tech', 'Music', 'Hiking'],
@@ -50,7 +54,7 @@ const mockUsers: User[] = [
     id: '5',
     name: 'Priya Sharma',
     age: 25,
-    bio: 'Data Scientist • AI researcher • Making sense of big data 📊',
+    bio: 'Data scientist and AI researcher making sense of big data.',
     avatar: 'https://i.pravatar.cc/400?img=9',
     skills: ['Python', 'TensorFlow', 'Statistics', 'Deep Learning'],
     interests: ['AI', 'Research', 'Books'],
@@ -63,20 +67,46 @@ class API {
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('auth_token', token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
   }
 
   getToken() {
     if (!this.token) {
       // Check both auth_token (old) and access_token (new from email verification)
-      this.token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      this.token = localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(TOKEN_STORAGE_KEY);
     }
     return this.token;
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+
+  private storeUser(user: AuthUser) {
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  }
+
+  getStoredUser(): AuthUser | null {
+    try {
+      const value = localStorage.getItem(USER_STORAGE_KEY);
+      return value ? (JSON.parse(value) as AuthUser) : null;
+    } catch (error) {
+      console.warn('Failed to parse stored user', error);
+      return null;
+    }
+  }
+
+  private clearStoredUser() {
+    localStorage.removeItem(USER_STORAGE_KEY);
+  }
+
+  clearSession() {
+    this.clearToken();
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    this.clearStoredUser();
   }
 
   private async request<T>(
@@ -141,7 +171,7 @@ class API {
 
     // Store tokens
     this.setToken(response.accessToken);
-    localStorage.setItem('refresh_token', response.refreshToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
 
     // Return user with profileComplete flag
     const authUser: AuthUser & { profileComplete?: boolean } = {
@@ -157,6 +187,7 @@ class API {
       profileComplete: response.user.profileComplete, // IMPORTANT!
     };
 
+    this.storeUser(authUser);
     return authUser;
   }
 
@@ -189,7 +220,7 @@ class API {
     // OLD: If tokens provided (OAuth or no verification needed)
     if (response.accessToken) {
       this.setToken(response.accessToken);
-      localStorage.setItem('refresh_token', response.refreshToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
 
       // Return user with profileComplete flag
       const authUser: AuthUser & { profileComplete?: boolean } = {
@@ -205,6 +236,7 @@ class API {
         profileComplete: response.user.profileComplete,
       };
 
+      this.storeUser(authUser);
       return authUser;
     }
 
@@ -213,7 +245,45 @@ class API {
   }
 
   async logout(): Promise<void> {
-    this.clearToken();
+    try {
+      await this.request('/auth/logout', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.warn('Logout request failed or skipped:', error);
+    } finally {
+      this.clearSession();
+    }
+  }
+
+  async fetchCurrentUser(): Promise<AuthUser | null> {
+    const token = this.getToken();
+    if (!token) {
+      return null;
+    }
+
+    const profile = await this.request<any>('/me');
+
+    if (!profile || !profile.userId) {
+      return null;
+    }
+
+    const authUser: AuthUser = {
+      id: profile.userId,
+      name: profile.name || '',
+      email: profile.email || '',
+      age: profile.age || 0,
+      bio: profile.bio || '',
+      avatar: Array.isArray(profile.photos) && profile.photos.length > 0 ? profile.photos[0] : '',
+      skills: profile.skills || [],
+      interests: profile.interests || [],
+      token,
+      emailVerified: Boolean(profile.verified),
+      profileComplete: profile.profileComplete ?? true,
+    };
+
+    this.storeUser(authUser);
+    return authUser;
   }
 
   // Discover endpoints
@@ -318,3 +388,4 @@ class API {
 }
 
 export const api = new API();
+

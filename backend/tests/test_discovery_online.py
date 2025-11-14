@@ -5,6 +5,7 @@ Comprehensive test coverage for compatibility scoring and user discovery
 import pytest
 from datetime import datetime, timedelta
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -28,15 +29,20 @@ def create_mock_user(
     is_online: bool = True
 ):
     """Helper to create mock user data"""
+    try:
+        object_id = ObjectId(user_id)
+    except InvalidId:
+        object_id = ObjectId()
+    
     return {
-        "_id": ObjectId(user_id),
+        "_id": object_id,
         "email": f"{name.lower().replace(' ', '.')}@example.com",
         "name": name,
         "age": age,
         "field": field,
         "avatar": f"https://example.com/{name.lower()}.jpg",
-        "skills": skills or ["Skill1", "Skill2"],
-        "interests": interests or ["Interest1", "Interest2"],
+        "skills": skills if skills is not None else ["Skill1", "Skill2"],
+        "interests": interests if interests is not None else ["Interest1", "Interest2"],
         "bio": f"Bio for {name}",
         "location": {"lat": -6.2088, "lon": 106.8456, "city": "Jakarta"},
         "isOnline": is_online,

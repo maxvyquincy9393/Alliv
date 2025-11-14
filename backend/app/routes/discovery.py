@@ -84,7 +84,7 @@ def calculate_compatibility(user_profile: dict, target_profile: dict, distance_k
 
 # ===== ROUTES =====
 
-@router.get("/online")
+@router.get("/legacy/online", include_in_schema=False)
 async def discover_online(
     limit: int = Query(10, ge=1, le=50),
     field: Optional[str] = None,
@@ -182,7 +182,7 @@ async def discover_online(
         )
 
 
-@router.get("/nearby")
+@router.get("/legacy/nearby", include_in_schema=False)
 async def discover_nearby(
     lat: float = Query(..., ge=-90, le=90, description="User latitude"),
     lon: float = Query(..., ge=-180, le=180, description="User longitude"),

@@ -1,140 +1,123 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authAPI, profileAPI } from '../services/api';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  verified: boolean;
-  profile?: any;
-}
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { AuthUser } from '../types/user';
+import { api } from '../lib/api';
+import { socketService } from '../lib/socket';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (email: string, password: string, name: string, birthdate: string) => Promise<boolean>;
-  logout: () => void;
-  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<AuthUser & { profileComplete?: boolean }>;
+  register: (data: { name: string; email: string; password: string }) => Promise<any>;
+  logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check authentication on mount
   useEffect(() => {
-    checkAuth();
-  }, []);
+    let isMounted = true;
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    const restoreSession = async () => {
+      const token = api.getToken();
+      const storedUser = api.getStoredUser();
 
-    try {
-      const response = await profileAPI.getMe();
-      if (response.data) {
-        setUser(response.data);
-      } else {
-        // Token might be expired
-        const refreshResponse = await authAPI.refreshToken();
-        if (refreshResponse.data) {
-          // Retry getting profile
-          const retryResponse = await profileAPI.getMe();
-          if (retryResponse.data) {
-            setUser(retryResponse.data);
-          }
-        } else {
-          // Refresh failed, clear tokens
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+      if (storedUser) {
+        setUser(storedUser);
+        socketService.connect(storedUser.id);
+      }
+
+      if (!token) {
+        if (isMounted) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const freshUser = await api.fetchCurrentUser();
+        if (!isMounted) return;
+
+        if (freshUser) {
+          setUser(freshUser);
+          socketService.connect(freshUser.id);
+        } else if (!storedUser) {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Session restore failed:', error);
+        api.clearSession();
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
         }
       }
+    };
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const userData = await api.login(email, password);
+      setUser(userData);
+      socketService.connect(userData.id);
+      return userData;
     } catch (error) {
-      console.error('Auth check failed:', error);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      console.error('Login failed:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const register = useCallback(async (data: { name: string; email: string; password: string }) => {
+    setLoading(true);
     try {
-      const response = await authAPI.login({ email, password });
-      if (response.data) {
-        await refreshUser();
-        return true;
+      const userData = await api.register(data);
+      if (userData && 'id' in userData) {
+        setUser(userData);
+        socketService.connect(userData.id);
       }
-      return false;
-    } catch (error) {
-      console.error('Login failed:', error);
-      return false;
-    }
-  };
-
-  const register = async (
-    email: string,
-    password: string,
-    name: string,
-    birthdate: string
-  ): Promise<boolean> => {
-    try {
-      const response = await authAPI.register({
-        email,
-        password,
-        name,
-        birthdate,
-      });
-      if (response.data) {
-        // Auto login after registration
-        return await login(email, password);
-      }
-      return false;
+      return userData;
     } catch (error) {
       console.error('Registration failed:', error);
-      return false;
+      throw error;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = () => {
-    authAPI.logout();
+  const logout = useCallback(async () => {
+    await api.logout();
+    socketService.disconnect();
     setUser(null);
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-  };
-
-  const refreshUser = async () => {
-    try {
-      const response = await profileAPI.getMe();
-      if (response.data) {
-        setUser(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to refresh user:', error);
-    }
-  };
+  }, []);
 
   const value: AuthContextType = {
     user,
     loading,
+    isAuthenticated: !!user || !!api.getToken(),
     login,
     register,
     logout,
-    refreshUser,
-    isAuthenticated: !!user,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
+export const useAuthContext = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

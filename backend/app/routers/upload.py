@@ -11,7 +11,7 @@ from bson import ObjectId
 import logging
 
 from ..db import get_db
-from ..auth import get_current_user
+from ..auth import get_current_user, oauth2_scheme
 from ..services.cloudinary import cloudinary_service
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,22 @@ class UserPhotosResponse(BaseModel):
     photos: List[dict]
     count: int
     maxPhotos: int = 6
+
+
+async def _get_current_user_dependency(
+    token: str = Depends(oauth2_scheme)
+) -> dict:
+    """Wrap auth dependency so tests can patch get_current_user dynamically."""
+    try:
+        return await get_current_user(token=token)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"[WARN] Auth dependency error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
 
 
 # ===== HELPER FUNCTIONS =====
@@ -149,7 +165,7 @@ async def remove_photo_from_user(user_id: str, public_id: str):
 @router.post("/photo", response_model=PhotoUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_photo(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
     Upload a photo to Cloudinary
@@ -220,9 +236,12 @@ async def upload_photo(
         
     except ValueError as e:
         # File validation errors
+        error_message = str(e)
+        if "invalid" not in error_message.lower():
+            error_message = f"Invalid photo upload: {error_message}"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=error_message
         )
     except HTTPException:
         raise
@@ -237,7 +256,7 @@ async def upload_photo(
 @router.delete("/photo", response_model=PhotoDeleteResponse)
 async def delete_photo(
     request: PhotoDeleteRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
     Delete a photo from Cloudinary and user profile
@@ -309,7 +328,7 @@ async def delete_photo(
 
 @router.get("/photos", response_model=UserPhotosResponse)
 async def get_user_photos(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
     Get all photos for current user

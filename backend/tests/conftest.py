@@ -3,38 +3,51 @@ Pytest configuration and fixtures
 """
 import pytest
 import pytest_asyncio
-import asyncio
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
 from motor.motor_asyncio import AsyncIOMotorClient
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.config import Settings
+from app import db as app_db
 
 
-@pytest_asyncio.fixture
-async def test_db() -> AsyncGenerator:
-    """
-    Create test database connection
-    """
-    # Use test database
-    client = AsyncIOMotorClient("mongodb://localhost:27017")
-    db = client["alliv_test"]
-    
-    yield db
-    
-    # Cleanup after test
-    await client.drop_database("alliv_test")
-    client.close()
+TEST_DB_NAME = "alliv_test_pytest"
+MONGO_TEST_URI = "mongodb://localhost:27017"
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client() -> AsyncGenerator[AsyncClient, None]:
+async def db() -> AsyncGenerator:
+    """
+    Provide an isolated Mongo database and hook it into app.db.
+    """
+    client = AsyncIOMotorClient(MONGO_TEST_URI)
+    database = client[TEST_DB_NAME]
+    
+    # Ensure clean slate
+    await client.drop_database(TEST_DB_NAME)
+    
+    # Attach to application globals
+    app_db._client = client  # pylint: disable=protected-access
+    app_db._db = database    # pylint: disable=protected-access
+    
+    try:
+        yield database
+    finally:
+        await client.drop_database(TEST_DB_NAME)
+        client.close()
+        app_db._client = None  # pylint: disable=protected-access
+        app_db._db = None      # pylint: disable=protected-access
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(db) -> AsyncGenerator[AsyncClient, None]:
     """
     Create test HTTP client
     """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
 
 
 @pytest.fixture
