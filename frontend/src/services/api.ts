@@ -286,6 +286,36 @@ export const authAPI = {
       body: JSON.stringify(data),
     });
   },
+
+  /**
+   * Request password reset OTP
+   */
+  requestPasswordReset: async (data: { email: string }) => {
+    return fetchAPI('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Verify password reset OTP
+   */
+  verifyPasswordResetOTP: async (data: { email: string; code: string }) => {
+    return fetchAPI<{ token: string }>('/auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Reset password with token
+   */
+  resetPassword: async (data: { email: string; token: string; newPassword: string }) => {
+    return fetchAPI('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // Profile API

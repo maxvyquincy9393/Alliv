@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Application
     NODE_ENV: str = Field(default="development", env="NODE_ENV")
     PORT: int = Field(default=8080, env="PORT")
-    CORS_ORIGIN: str = Field(default="http://localhost:3000", env="CORS_ORIGIN")
+    CORS_ORIGIN: str = Field(default="http://localhost:5173", env="CORS_ORIGIN")
     
     # Database
     MONGO_URI: str = Field(..., env="MONGO_URI")
@@ -132,8 +132,8 @@ def get_settings():
     try:
         return Settings()
     except Exception as e:
-        print(f"⚠️  Config validation failed: {e}")
-        print("⚠️  Using fallback settings for development")
+        print(f"[WARN]  Config validation failed: {e}")
+        print("[WARN]  Using fallback settings for development")
         
         # Return development settings with safe defaults
         import os

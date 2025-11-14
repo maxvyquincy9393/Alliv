@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Edit2, AlertCircle } from 'lucide-react';
+import { Edit2, AlertCircle } from 'lucide-react';
 import { GlassButton } from '../../components/GlassButton';
 import { PhotoEditor } from '../../components/PhotoEditor';
 import { fadeInUp, stagger } from '../../lib/motion';

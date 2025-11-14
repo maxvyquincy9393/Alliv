@@ -24,7 +24,7 @@ export const Landing = () => {
             className="flex justify-center mb-8"
           >
             <img 
-              src="/logo/alivvlogo.png" 
+              src="/logo/blacklogo.png" 
               alt="Alivv Logo" 
               className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 object-contain"
             />

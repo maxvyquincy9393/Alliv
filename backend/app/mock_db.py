@@ -258,13 +258,13 @@ async def init_db():
         }
     ])
     
-    print(f"✅ Mock database initialized:")
+    print(f"[OK] Mock database initialized:")
     print(f"   - {len(_users)} users")
     print(f"   - {len(_likes)} likes")
     print(f"   - {len(_matches)} matches")
     print(f"   - {len(_messages)} messages")
     print()
-    print("📧 Test credentials:")
+    print("[EMAIL] Test credentials:")
     print("   Email: aulia@dev.com | Password: pass123")
     print("   Email: rizky@dev.com | Password: pass123")
     print("   (All users have password: pass123)")

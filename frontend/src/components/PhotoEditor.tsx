@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RotateCw, Crop, Download, X, Check, FlipHorizontal, FlipVertical } from 'lucide-react';
+import { RotateCw, Crop, X, FlipHorizontal, FlipVertical } from 'lucide-react';
 import { GlassButton } from './GlassButton';
 
 interface PhotoEditorProps {

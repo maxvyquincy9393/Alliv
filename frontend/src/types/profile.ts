@@ -55,6 +55,7 @@ export interface RegistrationData {
   // Account step
   name: string;
   email: string;
+  age?: number;
   birthday: string;
   gender: Gender;
   city: string;
@@ -63,6 +64,7 @@ export interface RegistrationData {
   
   // Photos step
   photos: string[];
+  photo?: string | null;
   
   // Info step
   field: string;

@@ -50,12 +50,12 @@ async def init_redis_limiter(redis_url: str) -> Optional[Limiter]:
             storage_uri=redis_url,
         )
         
-        logger.info(f"✅ Redis rate limiter initialized: {redis_url}")
+        logger.info(f"[OK] Redis rate limiter initialized: {redis_url}")
         return redis_limiter
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Redis rate limiter: {e}")
-        logger.warning("⚠️  Falling back to in-memory rate limiting")
+        logger.error(f"[ERROR] Failed to initialize Redis rate limiter: {e}")
+        logger.warning("[WARN]  Falling back to in-memory rate limiting")
         return None
 
 

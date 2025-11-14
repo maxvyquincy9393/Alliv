@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, MapPin, Users, Calendar, ArrowLeft } from 'lucide-react';
+import { Upload, X, MapPin, Calendar, ArrowLeft } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { GlassButton } from '../components/GlassButton';
 import { fadeInUp, stagger } from '../lib/motion';

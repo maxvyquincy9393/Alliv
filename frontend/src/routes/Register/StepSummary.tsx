@@ -4,31 +4,135 @@ import { useNavigate } from 'react-router-dom';
 import { useRegistrationStore } from '../../store/registration';
 import { GlassButton } from '../../components/GlassButton';
 import { api } from '../../lib/api';
+import toast from 'react-hot-toast';
 
 export const StepSummary = () => {
   const navigate = useNavigate();
   const { data, reset } = useRegistrationStore();
   const [creating, setCreating] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
 
   const handleCreate = async () => {
+    // Validate email first
+    if (!data.email || !data.email.trim()) {
+      toast.error('Please provide your email in the Account step');
+      navigate('/register/account');
+      return;
+    }
+
+    // If password not set yet, show password input
+    if (!showPasswordInput) {
+      setShowPasswordInput(true);
+      return;
+    }
+
+    // Validate password
+    if (!password || password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+
+    // Check password requirements
+    if (!/[A-Z]/.test(password)) {
+      toast.error('Password must contain at least one uppercase letter');
+      return;
+    }
+
+    if (!/[a-z]/.test(password)) {
+      toast.error('Password must contain at least one lowercase letter');
+      return;
+    }
+
+    if (!/[0-9]/.test(password)) {
+      toast.error('Password must contain at least one number');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
     setCreating(true);
     
     try {
-      // Register with API
-      await api.register({
-        name: data.name!,
-        email: `${data.name!.toLowerCase().replace(/\s/g, '')}@alliv.app`,
-        password: 'temporary123',
+      console.log('🚀 Starting registration with:', { name: data.name, email: data.email });
+      
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout - please try again')), 30000)
+      );
+      
+      // Register with API (with 30s timeout)
+      const response = await Promise.race([
+        api.register({
+          name: data.name!,
+          email: data.email,
+          password: password,
+        }),
+        timeoutPromise
+      ]) as any;
+
+      console.log('✅ Registration response:', response);
+      console.log('Response type:', typeof response);
+      console.log('requiresEmailVerification:', response?.requiresEmailVerification);
+
+      toast.success('Registration successful! Please check your email to verify your account.');
+
+      // Navigate to verify email page or home
+      if (response && response.requiresEmailVerification) {
+        console.log('📧 Email verification required, navigating to verify-email page');
+        
+        // Reset registration state BEFORE navigate
+        reset();
+        
+        // Navigate immediately
+        navigate('/verify-email', { 
+          state: { 
+            email: data.email,
+            verificationToken: response.verificationToken 
+          },
+          replace: true // Replace current history entry
+        });
+      } else {
+        console.log('✅ No verification needed, going to home');
+        
+        // Reset registration state BEFORE navigate
+        reset();
+        
+        navigate('/home', { replace: true });
+      }
+    } catch (error: any) {
+      console.error('❌ Registration failed:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        fullError: error
       });
-
-      // Reset registration state
-      reset();
-
-      // Navigate to home
-      navigate('/home');
-    } catch (error) {
-      console.error('Registration failed:', error);
+      
+      // Extract detailed error message
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Handle validation errors from backend
+      if (error.message && error.message.includes('uppercase')) {
+        errorMessage = 'Password must contain at least one uppercase letter';
+      } else if (error.message && error.message.includes('lowercase')) {
+        errorMessage = 'Password must contain at least one lowercase letter';
+      } else if (error.message && error.message.includes('number') || error.message && error.message.includes('digit')) {
+        errorMessage = 'Password must contain at least one number';
+      } else if (error.message && error.message.includes('already registered')) {
+        errorMessage = 'This email is already registered. Try logging in instead.';
+      }
+      
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
+      console.log('🏁 Registration process completed, setting creating to false');
       setCreating(false);
     }
   };
@@ -111,6 +215,53 @@ export const StepSummary = () => {
         )}
       </div>
 
+      {/* Password Input - Shows after clicking Create Profile */}
+      {showPasswordInput && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card rounded-2xl p-8 mb-8 space-y-4"
+        >
+          {/* Password Requirements Info */}
+          <div className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-white mb-2">Password Requirements:</h4>
+            <ul className="text-xs text-white/70 space-y-1">
+              <li>• At least 8 characters</li>
+              <li>• At least one uppercase letter (A-Z)</li>
+              <li>• At least one lowercase letter (a-z)</li>
+              <li>• At least one number (0-9)</li>
+            </ul>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-2">
+              Create Password *
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 glass rounded-xl text-white placeholder-white/30 focus:ring-2 focus:ring-accent-blue/50 transition-all"
+              placeholder="e.g., SecurePass123"
+              minLength={8}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-2">
+              Confirm Password *
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-3 glass rounded-xl text-white placeholder-white/30 focus:ring-2 focus:ring-accent-blue/50 transition-all"
+              placeholder="Re-enter your password"
+              minLength={8}
+            />
+          </div>
+        </motion.div>
+      )}
+
       <div className="space-y-3">
         <GlassButton
           variant="primary"
@@ -118,7 +269,7 @@ export const StepSummary = () => {
           onClick={handleCreate}
           loading={creating}
         >
-          Create Profile
+          {showPasswordInput ? 'Complete Registration' : 'Create Profile'}
         </GlassButton>
 
         <GlassButton

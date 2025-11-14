@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { X, AlertTriangle, Shield, User, MessageSquare, Camera, Upload } from 'lucide-react';
+import { X, AlertTriangle, Shield, User, MessageSquare, Camera } from 'lucide-react';
 import { GlassButton } from './GlassButton';
 import axios from 'axios';
 

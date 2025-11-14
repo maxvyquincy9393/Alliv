@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Code, Link, Camera, ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { GlassButton } from './GlassButton';
 import { PhotoUploader } from './PhotoUploader';
-import { SkillTag } from './SkillTag';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -123,7 +122,7 @@ export const ProfileEditModal = ({ isOpen, onClose, profile, onSave }: ProfileEd
     setFormData(prev => ({
       ...prev,
       skills: prev.skills.includes(skill)
-        ? prev.skills.filter(s => s !== skill)
+        ? prev.skills.filter((s: string) => s !== skill)
         : [...prev.skills, skill]
     }));
   };
@@ -132,7 +131,7 @@ export const ProfileEditModal = ({ isOpen, onClose, profile, onSave }: ProfileEd
     setFormData(prev => ({
       ...prev,
       interests: prev.interests.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
+        ? prev.interests.filter((i: string) => i !== interest)
         : [...prev.interests, interest]
     }));
   };
@@ -421,7 +420,6 @@ export const ProfileEditModal = ({ isOpen, onClose, profile, onSave }: ProfileEd
                           photos={formData.photos}
                           onPhotosChange={(photos) => setFormData({ ...formData, photos })}
                           maxPhotos={6}
-                          minPhotos={2}
                         />
                         {errors.photos && (
                           <p className="text-red-400 text-sm mt-2">{errors.photos}</p>

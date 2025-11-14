@@ -28,10 +28,10 @@ async def init_db() -> AsyncIOMotorDatabase:
         # Create indices
         await create_indices()
         
-        logger.info(f"✅ Connected to MongoDB database: {db_name}")
+        logger.info(f"[OK] Connected to MongoDB database: {db_name}")
         return _db
     except Exception as e:
-        logger.error(f"❌ Failed to connect to MongoDB: {e}")
+        logger.error(f"[ERROR] Failed to connect to MongoDB: {e}")
         raise
 
 
@@ -40,7 +40,7 @@ async def close_db():
     global _client
     if _client:
         _client.close()
-        logger.info("✅ MongoDB connection closed")
+        logger.info("[OK] MongoDB connection closed")
 
 
 async def create_indices():
@@ -57,15 +57,16 @@ async def create_indices():
         await _db.profiles.create_index("skills")
         await _db.profiles.create_index("interests")
         
-        # Swipes indices
-        await _db.swipes.create_index([("swiperId", 1), ("targetId", 1)])
-        await _db.swipes.create_index("swiperId")
+        # Swipes indices - FIXED: Use correct field names
+        await _db.swipes.create_index([("userId", 1), ("targetId", 1)], unique=True)
+        await _db.swipes.create_index("userId")
         await _db.swipes.create_index("targetId")
+        await _db.swipes.create_index("createdAt")
         
-        # Matches indices
-        await _db.matches.create_index([("userA", 1), ("userB", 1)], unique=True)
-        await _db.matches.create_index("userA")
-        await _db.matches.create_index("userB")
+        # Matches indices - FIXED: Use correct field names
+        await _db.matches.create_index([("user1", 1), ("user2", 1)], unique=True)
+        await _db.matches.create_index([("user1", 1), ("createdAt", -1)])
+        await _db.matches.create_index([("user2", 1), ("createdAt", -1)])
         await _db.matches.create_index("status")
         
         # Messages indices
@@ -97,9 +98,10 @@ async def create_indices():
         # TTL index - MongoDB auto-deletes expired documents
         await _db.verifications.create_index("expiresAt", expireAfterSeconds=0)
         
-        logger.info("✅ Database indices created")
+        logger.info("[OK] Database indices created")
     except Exception as e:
-        logger.warning(f"⚠️ Error creating indices: {e}")
+        logger.error(f"[ERROR] Failed to create indices: {e}")
+        raise
 
 
 def get_db() -> AsyncIOMotorDatabase:

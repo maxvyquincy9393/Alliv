@@ -187,6 +187,77 @@ class GitHubOAuth(OAuthProvider):
                 )
 
 
+class FacebookOAuth(OAuthProvider):
+    """Facebook OAuth implementation"""
+    
+    TOKEN_URL = "https://graph.facebook.com/v18.0/oauth/access_token"
+    USER_INFO_URL = "https://graph.facebook.com/me"
+    
+    async def exchange_code_for_token(self, code: str) -> Dict:
+        """Exchange authorization code for access token"""
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    self.TOKEN_URL,
+                    params={
+                        "code": code,
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "redirect_uri": self.redirect_uri
+                    }
+                )
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to exchange code for token: {e.response.text}"
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"OAuth token exchange failed: {str(e)}"
+                )
+    
+    async def get_user_info(self, access_token: str) -> Dict:
+        """Get user info from Facebook"""
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(
+                    self.USER_INFO_URL,
+                    params={
+                        "fields": "id,name,email,picture.type(large)",
+                        "access_token": access_token
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract picture URL
+                picture_url = None
+                if data.get("picture") and data["picture"].get("data"):
+                    picture_url = data["picture"]["data"].get("url")
+                
+                # Normalize to common format
+                return {
+                    "email": data.get("email"),
+                    "name": data.get("name"),
+                    "provider_id": data.get("id"),
+                    "avatar": picture_url,
+                    "email_verified": True  # Facebook emails are verified
+                }
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to get user info: {e.response.text}"
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to fetch user info: {str(e)}"
+                )
+
+
 async def get_oauth_user_info(
     provider: str,
     code: str,
@@ -198,7 +269,7 @@ async def get_oauth_user_info(
     Get user info from OAuth provider
     
     Args:
-        provider: 'google' or 'github'
+        provider: 'google', 'github', or 'facebook'
         code: Authorization code from OAuth callback
         client_id: OAuth client ID
         client_secret: OAuth client secret
@@ -219,6 +290,8 @@ async def get_oauth_user_info(
         oauth = GoogleOAuth(client_id, client_secret, redirect_uri)
     elif provider == "github":
         oauth = GitHubOAuth(client_id, client_secret, redirect_uri)
+    elif provider == "facebook":
+        oauth = FacebookOAuth(client_id, client_secret, redirect_uri)
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

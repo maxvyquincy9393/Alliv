@@ -6,12 +6,12 @@ import { GlassButton } from '../../components/GlassButton';
 export const StepPhoto = () => {
   const { data, setData, nextStep, prevStep } = useRegistrationStore();
 
-  const handleUpload = (url: string) => {
-    setData({ photo: url });
+  const handlePhotosChange = (photos: string[]) => {
+    setData({ photos });
   };
 
   const handleContinue = () => {
-    if (data.photo) {
+    if (data.photos && data.photos.length > 0) {
       nextStep();
     }
   };
@@ -24,14 +24,15 @@ export const StepPhoto = () => {
       className="w-full max-w-md mx-auto"
     >
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-white mb-3">Add Your Photo</h1>
-        <p className="text-white/50">Show your authentic self</p>
+        <h1 className="text-4xl font-bold text-white mb-3">Add Your Photos</h1>
+        <p className="text-white/50">Show your authentic self (up to 6 photos)</p>
       </div>
 
       <div className="flex justify-center mb-12">
         <PhotoUploader 
-          onUploadComplete={handleUpload}
-          currentPhoto={data.photo}
+          photos={data.photos || []}
+          onPhotosChange={handlePhotosChange}
+          maxPhotos={6}
         />
       </div>
 
@@ -40,7 +41,7 @@ export const StepPhoto = () => {
           variant="primary"
           fullWidth
           onClick={handleContinue}
-          disabled={!data.photo}
+          disabled={!data.photos || data.photos.length === 0}
         >
           Continue
         </GlassButton>

@@ -146,8 +146,8 @@ async def seed():
     await users.insert_many(sample_users)
     print(f"  ✓ Created {len(sample_users)} sample users")
     
-    print("\n✅ Seeding complete!")
-    print("\n📝 Sample credentials:")
+    print("\n[OK] Seeding complete!")
+    print("\n[NOTE] Sample credentials:")
     print("   Email: aulia@dev.com | Password: pass123")
     print("   Email: rizky@dev.com | Password: pass123")
     print("   Email: sari@dev.com  | Password: pass123")

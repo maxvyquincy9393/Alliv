@@ -34,7 +34,7 @@ def init_mock_data():
             "role": "AI Engineer",
             "skills": ["Python", "PyTorch", "NLP", "TensorFlow"],
             "project_interest": "Web AI",
-            "bio": "Building the future with AI 🚀 Looking for frontend wizards to create magic together",
+            "bio": "Building the future with AI [LAUNCH] Looking for frontend wizards to create magic together",
             "availability_hours": 15,
             "age": 28,
             "location": "Jakarta, Indonesia",
@@ -174,7 +174,7 @@ def init_mock_data():
             "role": "Data Scientist",
             "skills": ["Python", "TensorFlow", "Pandas", "SQL"],
             "project_interest": "Web AI",
-            "bio": "Data whisperer 📊 Turning numbers into insights with ML",
+            "bio": "Data whisperer [STATS] Turning numbers into insights with ML",
             "availability_hours": 16,
             "age": 28,
             "location": "Beijing, China",
@@ -227,7 +227,7 @@ def init_mock_data():
             "_id": "msg::2",
             "match_id": "match::1",
             "sender": "user::2",
-            "content": "Hi! Yes, that sounds amazing! I've been wanting to work on an AI project 🚀",
+            "content": "Hi! Yes, that sounds amazing! I've been wanting to work on an AI project [LAUNCH]",
             "created_at": datetime.utcnow()
         }
     ])
@@ -346,12 +346,12 @@ async def init_db():
     """Initialize mock database"""
     stats = init_mock_data()
     print("🔥 Mock Database Ready (Tinder-style)")
-    print(f"   ✅ {stats['users']} users loaded")
-    print(f"   ✅ {stats['likes']} likes")
-    print(f"   ✅ {stats['matches']} matches")
-    print(f"   ✅ {stats['messages']} messages")
+    print(f"   [OK] {stats['users']} users loaded")
+    print(f"   [OK] {stats['likes']} likes")
+    print(f"   [OK] {stats['matches']} matches")
+    print(f"   [OK] {stats['messages']} messages")
     print()
-    print("📧 Test Login:")
+    print("[EMAIL] Test Login:")
     print("   Email: aulia@dev.com | Password: pass123")
     print("   Email: sarah@dev.com | Password: pass123")
     print("   (All users: pass123)")

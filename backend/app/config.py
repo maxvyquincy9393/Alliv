@@ -15,7 +15,7 @@ class Settings:
     NODE_ENV: str = os.getenv("NODE_ENV", "development")
     DEBUG: bool = os.getenv("NODE_ENV", "development") == "development"  # Show debug info in dev mode
     PORT: int = int(os.getenv("PORT", "8080"))
-    CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:3000")
+    CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:5173")
     
     # Database
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017/alliv")
@@ -88,11 +88,11 @@ class Settings:
                 required_vars.append("REFRESH_TOKEN_FINGERPRINT_PEPPER (min 32 chars)")
         
         if required_vars:
-            print("\n❌ Configuration Error: Missing required environment variables")
+            print("\n[ERROR] Configuration Error: Missing required environment variables")
             print("\n📋 Required variables:")
             for var in required_vars:
                 print(f"  - {var}")
-            print("\n💡 Create a .env file with these variables.")
+            print("\n[TIP] Create a .env file with these variables.")
             print("   Run: python generate_secrets.py")
             sys.exit(1)
 
@@ -100,18 +100,18 @@ class Settings:
         """Validate URL formats"""
         # Validate MongoDB URI
         if not self.MONGO_URI.startswith('mongodb://') and not self.MONGO_URI.startswith('mongodb+srv://'):
-            print("\n❌ Configuration Error: Invalid MONGO_URI format")
+            print("\n[ERROR] Configuration Error: Invalid MONGO_URI format")
             print("   Must start with 'mongodb://' or 'mongodb+srv://'")
             sys.exit(1)
         
         # Validate Redis URL if set
         if self.REDIS_URL and not self.REDIS_URL.startswith('redis://'):
-            print("\n⚠️ Warning: REDIS_URL should start with 'redis://'")
+            print("\n[WARN] Warning: REDIS_URL should start with 'redis://'")
 
     def _validate_cors(self):
         """Validate CORS configuration"""
         if self.NODE_ENV == "production" and self.CORS_ORIGIN == "*":
-            print("\n❌ Configuration Error: CORS_ORIGIN cannot be '*' in production")
+            print("\n[ERROR] Configuration Error: CORS_ORIGIN cannot be '*' in production")
             print("   Set a specific origin like: https://yourdomain.com")
             sys.exit(1)
 
@@ -139,35 +139,35 @@ class Settings:
         else:
             # Development mode - generate temporary secrets if missing
             if not self.JWT_ACCESS_SECRET:
-                print("⚠️ WARNING: No JWT_ACCESS_SECRET found, generating temporary secret for development")
+                print("[WARN] WARNING: No JWT_ACCESS_SECRET found, generating temporary secret for development")
                 self.JWT_ACCESS_SECRET = secrets.token_urlsafe(32)
             
             if not self.JWT_REFRESH_SECRET:
-                print("⚠️ WARNING: No JWT_REFRESH_SECRET found, generating temporary secret for development")
+                print("[WARN] WARNING: No JWT_REFRESH_SECRET found, generating temporary secret for development")
                 self.JWT_REFRESH_SECRET = secrets.token_urlsafe(32)
             
             if not self.REFRESH_TOKEN_FINGERPRINT_PEPPER:
-                print("⚠️ WARNING: No REFRESH_TOKEN_FINGERPRINT_PEPPER found, generating temporary secret for development")
+                print("[WARN] WARNING: No REFRESH_TOKEN_FINGERPRINT_PEPPER found, generating temporary secret for development")
                 self.REFRESH_TOKEN_FINGERPRINT_PEPPER = secrets.token_urlsafe(32)
             
             # Warn about weak secrets
             if "change_this" in self.JWT_ACCESS_SECRET:
-                print("⚠️ WARNING: Using weak JWT_ACCESS_SECRET in development mode")
+                print("[WARN] WARNING: Using weak JWT_ACCESS_SECRET in development mode")
             if "change_this" in self.JWT_REFRESH_SECRET:
-                print("⚠️ WARNING: Using weak JWT_REFRESH_SECRET in development mode")
+                print("[WARN] WARNING: Using weak JWT_REFRESH_SECRET in development mode")
             if "change_this" in self.REFRESH_TOKEN_FINGERPRINT_PEPPER:
-                print("⚠️ WARNING: Using weak REFRESH_TOKEN_FINGERPRINT_PEPPER in development mode")
+                print("[WARN] WARNING: Using weak REFRESH_TOKEN_FINGERPRINT_PEPPER in development mode")
 
 
 # Create settings instance with validation
 try:
     settings = Settings()
-    print("✅ Configuration loaded successfully")
+    print("[OK] Configuration loaded successfully")
     if settings.NODE_ENV == "development":
         print(f"   Environment: {settings.NODE_ENV}")
         print(f"   MongoDB: {settings.MONGO_URI[:20]}...")
         print(f"   CORS: {settings.CORS_ORIGIN}")
 except Exception as e:
-    print(f"\n❌ Configuration Error: {e}")
-    print("\n💡 Check your .env file or environment variables")
+    print(f"\n[ERROR] Configuration Error: {e}")
+    print("\n[TIP] Check your .env file or environment variables")
     sys.exit(1)

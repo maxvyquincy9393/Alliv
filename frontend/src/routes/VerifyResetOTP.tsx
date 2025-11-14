@@ -1,0 +1,174 @@
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { authAPI } from '../services/api';
+
+export const VerifyResetOTP = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const email = location.state?.email || '';
+  
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+
+  // Redirect if no email
+  useEffect(() => {
+    if (!email) {
+      navigate('/forgot-password');
+    }
+  }, [email, navigate]);
+
+  // Countdown timer for resend
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setCanResend(true);
+    }
+  }, [countdown]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Verify the OTP code
+      const response = await authAPI.verifyPasswordResetOTP({ email, code });
+      
+      // Extract token from response data
+      const token = response.data?.token;
+      
+      if (!token) {
+        throw new Error('No reset token received');
+      }
+      
+      // Navigate to reset password page with token
+      navigate('/reset-password', { 
+        state: { 
+          email, 
+          token,
+          fromOTPVerification: true 
+        } 
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Invalid or expired code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setResending(true);
+    setError('');
+
+    try {
+      await authAPI.requestPasswordReset({ email });
+      setCountdown(60);
+      setCanResend(false);
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend code. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        {/* Back Button */}
+        <Link 
+          to="/forgot-password"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-black transition-colors mb-8"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back
+        </Link>
+
+        {/* Logo */}
+        <Link to="/">
+          <h1 className="text-5xl sm:text-6xl font-semibold text-black text-center mb-12 cursor-pointer hover:opacity-70 transition-opacity">
+            Alliv
+          </h1>
+        </Link>
+
+        {/* Form Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-black mb-2">
+            Enter Verification Code
+          </h2>
+          <p className="text-gray-600 text-sm mb-6">
+            We sent a 6-digit code to <strong>{email}</strong>
+          </p>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Verification Code
+              </label>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black text-center text-2xl tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                placeholder="000000"
+                maxLength={6}
+                required
+                autoComplete="off"
+              />
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Enter the 6-digit code from your email
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              className="w-full py-3 bg-black text-white font-semibold rounded-full hover:bg-gray-800 transition-colors mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Verifying...' : 'Verify Code'}
+            </button>
+          </form>
+
+          {/* Resend Code */}
+          <div className="mt-6 text-center">
+            {canResend ? (
+              <button
+                onClick={handleResendCode}
+                disabled={resending}
+                className="text-black hover:opacity-70 transition-opacity font-medium text-sm disabled:opacity-50"
+              >
+                {resending ? 'Resending...' : 'Resend Code'}
+              </button>
+            ) : (
+              <p className="text-gray-500 text-sm">
+                Resend code in <strong>{countdown}s</strong>
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};

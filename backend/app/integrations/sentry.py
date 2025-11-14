@@ -39,7 +39,7 @@ def init_sentry(
             )
     """
     if not dsn:
-        logging.warning("⚠️  Sentry DSN not provided. Error tracking disabled.")
+        logging.warning("[WARN]  Sentry DSN not provided. Error tracking disabled.")
         return
     
     # Configure logging integration
@@ -78,7 +78,7 @@ def init_sentry(
         },
     )
     
-    logging.info(f"✅ Sentry initialized for environment: {environment}")
+    logging.info(f"[OK] Sentry initialized for environment: {environment}")
 
 
 def capture_exception(error: Exception, **kwargs):

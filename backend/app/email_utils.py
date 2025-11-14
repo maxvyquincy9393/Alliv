@@ -81,11 +81,11 @@ async def send_email(
             use_tls=smtp_config["use_tls"]
         )
         
-        logger.info(f"✅ Email sent to {to_email}: {subject}")
+        logger.info(f"[OK] Email sent to {to_email}: {subject}")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to send email to {to_email}: {e}")
+        logger.error(f"[ERROR] Failed to send email to {to_email}: {e}")
         return False
 
 
@@ -254,7 +254,7 @@ async def send_verification_email(to_email: str, verification_link: str, user_na
                 
                 <div class="warning">
                     <p class="warning-text">
-                        <strong>⏰ This code expires in 10 minutes.</strong><br>
+                        <strong>[TIME] This code expires in 10 minutes.</strong><br>
                         If you didn't request this, please ignore this email.
                     </p>
                 </div>

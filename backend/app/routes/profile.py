@@ -11,7 +11,7 @@ from pymongo.errors import PyMongoError
 import logging
 import re
 
-from .. import db
+from ..db import get_db
 from ..auth import get_current_user
 
 # Setup logging
@@ -50,7 +50,7 @@ class ProfileUpdate(BaseModel):
     modePreference: Optional[str] = None
     visibility: Optional[str] = None
     
-    # ✅ Input validation
+    # [OK] Input validation
     @validator('name')
     def validate_name(cls, v):
         if v is not None:
@@ -106,7 +106,7 @@ async def get_current_profile(current_user: dict = Depends(get_current_user)):
     
     try:
         # Get profile
-        profile = await db.profiles().find_one({"userId": user_id})
+        profile = await get_db().profiles.find_one({"userId": user_id})
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -125,13 +125,13 @@ async def get_current_profile(current_user: dict = Depends(get_current_user)):
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except PyMongoError as e:
-        logger.error(f"❌ Database error in get_current_profile: {str(e)}")
+        logger.error(f"[ERROR] Database error in get_current_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in get_current_profile: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in get_current_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve profile"
@@ -152,23 +152,23 @@ async def update_current_profile(
         # Build update document with sanitized data
         update_data = {}
         if data.name:
-            update_data["name"] = data.name.strip()  # ✅ Sanitized
+            update_data["name"] = data.name.strip()  # [OK] Sanitized
         if data.age:
             update_data["age"] = data.age
         if data.bio:
-            update_data["bio"] = data.bio.strip()  # ✅ Sanitized
+            update_data["bio"] = data.bio.strip()  # [OK] Sanitized
         if data.goals:
-            update_data["goals"] = data.goals.strip()  # ✅ Sanitized
+            update_data["goals"] = data.goals.strip()  # [OK] Sanitized
         if data.field:
             update_data["field"] = data.field.strip()
         if data.skills:
-            # ✅ Sanitize and limit skills
+            # [OK] Sanitize and limit skills
             update_data["skills"] = [s.strip() for s in data.skills if s.strip()][:5]
         if data.interests:
-            # ✅ Sanitize and limit interests
+            # [OK] Sanitize and limit interests
             update_data["interests"] = [i.strip() for i in data.interests if i.strip()][:7]
         if data.photos:
-            # ✅ Validate photo count
+            # [OK] Validate photo count
             if len(data.photos) > 6:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -192,8 +192,8 @@ async def update_current_profile(
         
         update_data["updatedAt"] = datetime.utcnow()
         
-        # ✅ Upsert profile with error handling
-        result = await db.profiles().update_one(
+        # [OK] Upsert profile with error handling
+        result = await get_db().profiles.update_one(
             {"userId": user_id},
             {
                 "$set": update_data,
@@ -206,9 +206,9 @@ async def update_current_profile(
             upsert=True  # Create if doesn't exist
         )
         
-        # ✅ Check if operation was successful
+        # [OK] Check if operation was successful
         if result.matched_count == 0 and result.upserted_id is None:
-            logger.error(f"❌ Profile update failed for user {user_id}")
+            logger.error(f"[ERROR] Profile update failed for user {user_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update profile"
@@ -216,13 +216,13 @@ async def update_current_profile(
         
         # Also update user's name if provided
         if data.name:
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {"name": data.name.strip()}}
             )
         
         # Return updated profile
-        profile = await db.profiles().find_one({"userId": user_id})
+        profile = await get_db().profiles.find_one({"userId": user_id})
         if profile:
             profile.pop("_id", None)
             profile["email"] = current_user.get("email")
@@ -234,7 +234,7 @@ async def update_current_profile(
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except PyMongoError as e:
-        logger.error(f"❌ Database error in update_current_profile: {str(e)}")
+        logger.error(f"[ERROR] Database error in update_current_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
@@ -246,7 +246,7 @@ async def update_current_profile(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in update_current_profile: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in update_current_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update profile"
@@ -264,15 +264,15 @@ async def update_photos(
     user_id = str(current_user["_id"])
     
     try:
-        # ✅ Business logic validation
+        # [OK] Business logic validation
         if len(data.photos) < 1 or len(data.photos) > 6:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Must have 1-6 photos"
             )
         
-        # ✅ Update photos with error handling
-        result = await db.profiles().update_one(
+        # [OK] Update photos with error handling
+        result = await get_db().profiles.update_one(
             {"userId": user_id},
             {
                 "$set": {
@@ -282,7 +282,7 @@ async def update_photos(
             }
         )
         
-        # ✅ Check if update successful
+        # [OK] Check if update successful
         if result.matched_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -291,20 +291,20 @@ async def update_photos(
         
         if result.modified_count == 0:
             # No changes made (same photos)
-            logger.info(f"⚠️ No changes made to photos for user {user_id}")
+            logger.info(f"[WARN] No changes made to photos for user {user_id}")
         
         return {"message": "Photos updated", "photos": data.photos}
         
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in update_photos: {str(e)}")
+        logger.error(f"[ERROR] Database error in update_photos: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in update_photos: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in update_photos: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update photos"
@@ -321,14 +321,14 @@ async def get_user_profile(
     """
     try:
         # Get target profile
-        profile = await db.profiles().find_one({"userId": user_id})
+        profile = await get_db().profiles.find_one({"userId": user_id})
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found"
             )
         
-        # ✅ Check visibility & authorization
+        # [OK] Check visibility & authorization
         visibility = profile.get("visibility", "public")
         current_user_id = str(current_user["_id"])
         
@@ -344,7 +344,7 @@ async def get_user_profile(
             # Check if users are matched
             if current_user_id != user_id:
                 # Check if there's a match between current_user and user_id
-                match = await db.matches().find_one({
+                match = await get_db().matches.find_one({
                     "$or": [
                         {"user1": current_user_id, "user2": user_id, "status": "matched"},
                         {"user1": user_id, "user2": current_user_id, "status": "matched"}
@@ -360,7 +360,7 @@ async def get_user_profile(
         # Remove sensitive fields
         profile.pop("_id", None)
         
-        # ✅ Hide exact location if requested
+        # [OK] Hide exact location if requested
         if profile.get("location", {}).get("hideExact"):
             if "location" in profile and "coordinates" in profile["location"]:
                 # Keep city/country but remove exact coordinates
@@ -371,13 +371,13 @@ async def get_user_profile(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in get_user_profile: {str(e)}")
+        logger.error(f"[ERROR] Database error in get_user_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in get_user_profile: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in get_user_profile: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve profile"

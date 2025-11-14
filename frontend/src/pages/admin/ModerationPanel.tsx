@@ -9,7 +9,6 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  Ban,
   Clock,
   TrendingDown,
   ChevronDown,

@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { SwipeCard } from '../components/SwipeCard';
 import { MatchModal } from '../components/MatchModal';
-import { RadiusSlider } from '../components/RadiusSlider';
-import { MapPin, LayoutGrid, Map as MapIcon, Filter, Users, Navigation, X } from 'lucide-react';
-import { fadeInUp, stagger } from '../lib/motion';
+import MapsView from '../components/MapsView';
+import { MapPin, LayoutGrid, Map, Filter, Navigation } from 'lucide-react';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useAuth } from '../hooks/useAuth';
+import { discoveryAPI } from '../services/api';
 import type { User } from '../types/user';
 
 interface ExtendedUser extends User {
@@ -19,38 +19,7 @@ interface ExtendedUser extends User {
   matchScore?: number;
 }
 
-const mockUsers: ExtendedUser[] = [
-  {
-    id: '1',
-    name: 'Andi Pratama',
-    age: 28,
-    bio: 'Full Stack Developer passionate about AI and startups',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=andi',
-    skills: ['React', 'Node.js', 'TypeScript', 'Python'],
-    interests: ['Tech', 'Design', 'Startups'],
-    location: 'Jakarta, Indonesia',
-    distance: 0.8,
-    lat: -6.2088,
-    lng: 106.8456,
-    isOnline: true,
-    matchScore: 92
-  },
-  {
-    id: '2',
-    name: 'Sarah Kim',
-    age: 26,
-    bio: 'UI/UX Designer who loves minimalism',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
-    skills: ['Figma', 'Adobe XD', 'Prototyping'],
-    interests: ['Design', 'Art', 'Music'],
-    location: 'Jakarta, Indonesia',
-    distance: 1.2,
-    lat: -6.2108,
-    lng: 106.8476,
-    isOnline: true,
-    matchScore: 85
-  }
-];
+// No mock data - using real API
 
 export const Discover = () => {
   const { isAuthenticated } = useAuth();
@@ -58,28 +27,94 @@ export const Discover = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   // State
-  const [users] = useState<ExtendedUser[]>(mockUsers); // Always use mock data for now
+  const [users, setUsers] = useState<ExtendedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<ExtendedUser | null>(null);
-  const [viewMode, setViewMode] = useState<'cards' | 'map'>(
-    (searchParams.get('mode') as 'cards' | 'map') || 'cards'
-  );
+  const [mode, setMode] = useState<'online' | 'nearby'>('online');
+  const [viewMode, setViewMode] = useState<'cards' | 'map'>('cards');
   const [radius, setRadius] = useState(Number(searchParams.get('radius')) || 10);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<ExtendedUser | null>(null);
   const [onlineOnly, setOnlineOnly] = useState(false);
+  const [field] = useState<string | null>(null); // Field filter not yet implemented
   
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const { location, error: locationError, loading: locationLoading } = useGeolocation();
+  const { location, loading: locationLoading } = useGeolocation();
+  const userLocation = location ? { lat: location.latitude, lon: location.longitude } : null;
 
-  // Temporarily disable auth check for debugging
-  // useEffect(() => {
-  //   if (!isAuthenticated) {
-  //     navigate('/login');
-  //   }
-  // }, [isAuthenticated, navigate]);
+  // Authentication check
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login?redirect=/discover', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Fetch users from API with cancellation support
+  useEffect(() => {
+    const abortController = new AbortController();
+    
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        let response;
+        if (mode === 'nearby' && userLocation) {
+          response = await discoveryAPI.discoverNearby({
+            lat: userLocation.lat,
+            lon: userLocation.lon,
+            radiusKm: radius,
+            field: field || undefined,
+            limit: 20
+          }, abortController.signal);
+        } else {
+          response = await discoveryAPI.discoverOnline({
+            field: field || undefined,
+            limit: 20
+          }, abortController.signal);
+        }
+        
+        // Check if request was cancelled
+        if (response.error === 'Request cancelled') {
+          console.log('User discovery request was cancelled');
+          return;
+        }
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        
+        const fetchedUsers = response.data?.users || [];
+        setUsers(fetchedUsers.map((user: any) => ({
+          ...user,
+          lat: user.location?.lat,
+          lng: user.location?.lon,
+          distance: user.distance,
+          isOnline: user.isOnline || false,
+          matchScore: user.compatibility || 0
+        })));
+      } catch (err: any) {
+        // Don't set error state if request was aborted
+        if (err.name !== 'AbortError' && err.message !== 'Request cancelled') {
+          console.error('Failed to fetch users:', err);
+          setError(err instanceof Error ? err.message : 'Failed to load users');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (isAuthenticated) {
+      fetchUsers();
+    }
+    
+    // Cleanup function - cancel request on unmount or dependency change
+    return () => {
+      abortController.abort();
+    };
+  }, [mode, userLocation, radius, field, isAuthenticated]);
+
 
   // Update URL when view mode or radius changes
   useEffect(() => {
@@ -88,79 +123,6 @@ export const Discover = () => {
     params.set('radius', radius.toString());
     setSearchParams(params);
   }, [viewMode, radius, setSearchParams]);
-
-  // Initialize map when in map mode
-  useEffect(() => {
-    if (viewMode === 'map' && typeof window !== 'undefined' && mapRef.current && !mapInstanceRef.current) {
-      const L = (window as any).L;
-      if (L) {
-        const mapCenter = location 
-          ? [location.latitude, location.longitude] 
-          : [-6.2088, 106.8456]; // Default to Jakarta
-          
-        const map = L.map(mapRef.current).setView(mapCenter, 13);
-        
-        // Light tile layer for white theme
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-          attribution: '© OpenStreetMap contributors, © CARTO'
-        }).addTo(map);
-
-        // User location marker
-        if (location) {
-          const userMarker = L.marker([location.latitude, location.longitude], {
-            icon: L.divIcon({
-              className: 'user-location-marker',
-              html: '<div class="pulse-marker"><div class="pulse-dot"></div></div>',
-              iconSize: [30, 30]
-            })
-          }).addTo(map);
-          userMarker.bindPopup('Your Location');
-        }
-
-        // Add markers for users
-        const filteredUsers = onlineOnly ? users.filter(u => u.isOnline) : users;
-        filteredUsers.forEach(user => {
-          if (user.lat && user.lng && (!radius || (user.distance && user.distance <= radius))) {
-            const marker = L.marker([user.lat, user.lng], {
-              icon: L.divIcon({
-                className: 'user-marker',
-                html: `
-                  <div class="relative cursor-pointer">
-                    <img src="${user.avatar}" class="w-12 h-12 rounded-full border-2 ${user.isOnline ? 'border-green-500' : 'border-gray-500'} shadow-lg" />
-                    ${user.isOnline ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-dark-surface"></div>' : ''}
-                  </div>
-                `,
-                iconSize: [48, 48]
-              })
-            }).addTo(map);
-            
-            marker.on('click', () => setSelectedUser(user));
-          }
-        });
-
-        // Add radius circle
-        if (location && radius < 50) {
-          L.circle([location.latitude, location.longitude], {
-            radius: radius * 1000,
-            color: '#6E9EFF',
-            fillColor: '#6E9EFF',
-            fillOpacity: 0.1,
-            weight: 2,
-            dashArray: '5, 10'
-          }).addTo(map);
-        }
-
-        mapInstanceRef.current = map;
-      }
-    }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [viewMode, location, users, radius, onlineOnly]);
 
   const handleSwipe = (direction: 'left' | 'right' | 'up') => {
     const currentUser = users[currentIndex];
@@ -177,10 +139,6 @@ export const Discover = () => {
     }
   };
 
-  const handleConnect = (user: ExtendedUser) => {
-    setMatchedUser(user);
-    setShowMatch(true);
-  };
 
   const filteredUsers = onlineOnly 
     ? users.filter(u => u.isOnline)
@@ -190,28 +148,44 @@ export const Discover = () => {
     ? filteredUsers.filter(u => u.distance && u.distance <= radius)
     : filteredUsers;
 
-  // Debug log
-  console.log('Discover Debug:', {
-    isAuthenticated,
-    viewMode,
-    currentIndex,
-    usersCount: users.length,
-    filteredCount: filteredUsers.length,
-    nearbyCount: nearbyUsers.length
-  });
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Finding collaborators...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center max-w-md">
+            <div className="text-red-500 text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold text-white mb-2">Oops!</h2>
+            <p className="text-gray-400 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Debug Info - Remove later */}
-        <div className="glass rounded-lg p-3 mb-4 text-xs text-white/60">
-          Auth: {isAuthenticated ? '✅' : '❌'} | 
-          Mode: {viewMode} | 
-          Users: {users.length} | 
-          Filtered: {filteredUsers.length} | 
-          Index: {currentIndex}
-        </div>
-
         {/* Header */}
         <div className="glass-strong rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between">
@@ -222,29 +196,28 @@ export const Discover = () => {
               </span>
             </div>
 
-            {/* View Mode Toggle */}
+            {/* Mode Toggle */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setViewMode('cards')}
+                onClick={() => setMode('online')}
                 className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  viewMode === 'cards'
-                    ? 'bg-accent-blue text-white'
-                    : 'glass text-white/60 hover:text-white'
+                  mode === 'online'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
                 }`}
               >
-                <LayoutGrid className="w-4 h-4" />
-                Cards
+                Online
               </button>
               <button
-                onClick={() => setViewMode('map')}
+                onClick={() => setMode('nearby')}
                 className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  viewMode === 'map'
-                    ? 'bg-accent-blue text-white'
-                    : 'glass text-white/60 hover:text-white'
+                  mode === 'nearby'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
                 }`}
               >
-                <MapIcon className="w-4 h-4" />
-                Map
+                <MapPin className="w-4 h-4" />
+                Nearby
               </button>
               
               <button
@@ -312,8 +285,77 @@ export const Discover = () => {
           </AnimatePresence>
         </div>
 
+        {/* View Mode Toggle for Nearby Mode */}
+        {mode === 'nearby' && (
+          <div className="flex gap-2 mb-4 justify-center">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
+                viewMode === 'cards' 
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
+                  : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+              }`}
+            >
+              <LayoutGrid className="inline mr-2" size={18} />
+              Cards View
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 ${
+                viewMode === 'map' 
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
+                  : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+              }`}
+            >
+              <Map className="inline mr-2" size={18} />
+              Map View
+            </button>
+          </div>
+        )}
+
         {/* Main Content */}
-        {viewMode === 'cards' ? (
+        {mode === 'nearby' && viewMode === 'map' ? (
+          /* Map View for Nearby Mode */
+          <div className="h-[600px] relative rounded-xl overflow-hidden">
+            {/* Map View */}
+            {location ? (
+                <MapsView
+                  users={nearbyUsers.map(user => ({
+                    id: user.id,
+                    name: user.name,
+                    age: user.age,
+                    field: user.interests?.[0] || 'General',
+                    photos: [user.avatar],
+                    location: {
+                      lat: user.lat || -6.2088,
+                      lon: user.lng || 106.8456,
+                      city: typeof user.location === 'string' ? user.location : (user.location?.city || 'Jakarta, Indonesia')
+                    },
+                    distance: user.distance,
+                    compatibility: user.matchScore
+                  }))}
+                  center={{ 
+                    lat: location.latitude, 
+                    lng: location.longitude 
+                  }}
+                  radius={radius}
+                  onUserClick={(user) => {
+                    // Navigate directly to user profile
+                    navigate(`/profiles/${user.id}`);
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full glass">
+                  <div className="text-center">
+                    <Navigation className="w-12 h-12 text-accent-blue mx-auto mb-4 animate-pulse" />
+                    <p className="text-white/60">
+                      {locationLoading ? 'Getting your location...' : 'Location required for map view'}
+                    </p>
+                  </div>
+                </div>
+              )}
+          </div>
+        ) : (
           /* Cards View */
           <div className="flex justify-center items-center min-h-[600px]">
             {/* Test card visibility */}
@@ -368,137 +410,6 @@ export const Discover = () => {
               )}
             </AnimatePresence>
           </div>
-        ) : (
-          /* Map View */
-          <div className="relative">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="relative h-[600px] rounded-2xl overflow-hidden glass"
-            >
-              <div ref={mapRef} className="w-full h-full" />
-              
-              {/* Loading State */}
-              {locationLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <div className="text-white flex items-center gap-3">
-                    <Navigation className="w-5 h-5 animate-pulse" />
-                    <span>Getting your location...</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Selected User Sidebar */}
-              <AnimatePresence>
-                {selectedUser && (
-                  <motion.div
-                    initial={{ x: 400, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 400, opacity: 0 }}
-                    className="absolute right-0 top-0 bottom-0 w-96 glass-strong shadow-2xl overflow-y-auto"
-                  >
-                    <div className="p-6">
-                      <button
-                        onClick={() => setSelectedUser(null)}
-                        className="absolute right-4 top-4 p-2 hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        <X className="w-5 h-5 text-white/60" />
-                      </button>
-                      
-                      <div className="mb-6">
-                        <img 
-                          src={selectedUser.avatar} 
-                          alt={selectedUser.name}
-                          className="w-32 h-32 rounded-2xl mx-auto mb-4"
-                        />
-                        <h3 className="text-2xl font-bold text-white text-center">
-                          {selectedUser.name}, {selectedUser.age}
-                        </h3>
-                        <div className="flex items-center justify-center gap-2 mt-2">
-                          <MapPin className="w-4 h-4 text-accent-blue" />
-                          <span className="text-white/60">{selectedUser.distance} km away</span>
-                          {selectedUser.isOnline && (
-                            <span className="px-2 py-0.5 bg-green-500/20 text-green-500 text-xs rounded-full">
-                              Online
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <p className="text-white/80 mb-4">{selectedUser.bio}</p>
-                      
-                      <div className="mb-4">
-                        <h4 className="text-sm font-medium text-white/60 mb-2">Skills</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedUser.skills.map(skill => (
-                            <span key={skill} className="px-3 py-1 bg-accent-blue/20 text-accent-blue text-sm rounded-lg">
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="mb-6">
-                        <h4 className="text-sm font-medium text-white/60 mb-2">Interests</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedUser.interests.map(interest => (
-                            <span key={interest} className="px-3 py-1 bg-accent-purple/20 text-accent-purple text-sm rounded-lg">
-                              {interest}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={() => handleConnect(selectedUser)}
-                        className="w-full px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
-                      >
-                        Connect
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Empty State */}
-              {nearbyUsers.length === 0 && !locationLoading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                      className="w-24 h-24 mx-auto mb-4 rounded-full border-4 border-accent-blue/20 border-t-accent-blue"
-                    />
-                    <h3 className="text-xl font-bold text-white mb-2">No one nearby yet</h3>
-                    <p className="text-white/60 mb-4">Try increasing your search radius or switch to Online mode</p>
-                    <div className="flex gap-3 justify-center">
-                      <button
-                        onClick={() => setRadius(Math.min(50, radius + 10))}
-                        className="px-4 py-2 glass text-white hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        Increase Radius
-                      </button>
-                      <button
-                        onClick={() => setRadius(50)}
-                        className="px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors"
-                      >
-                        Go Online
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Location Error */}
-              {locationError && (
-                <div className="absolute bottom-4 left-4 right-4 glass-strong rounded-lg p-4 border border-orange-500/30">
-                  <p className="text-orange-400 text-sm">
-                    {locationError}. Showing online users instead.
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          </div>
         )}
       </div>
 
@@ -513,78 +424,6 @@ export const Discover = () => {
           }}
         />
       )}
-
-      {/* Map Styles */}
-      <style>{`
-        @import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-        
-        .user-location-marker {
-          background: transparent;
-        }
-        
-        .pulse-marker {
-          position: relative;
-          width: 30px;
-          height: 30px;
-        }
-        
-        .pulse-dot {
-          position: absolute;
-          width: 12px;
-          height: 12px;
-          background: #6E9EFF;
-          border-radius: 50%;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          box-shadow: 0 0 10px rgba(110, 158, 255, 0.8);
-        }
-        
-        .pulse-dot::before {
-          content: '';
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          background: #6E9EFF;
-          border-radius: 50%;
-          animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-          0% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(3);
-            opacity: 0;
-          }
-        }
-        
-        .leaflet-container {
-          background: #0B0B0B;
-        }
-        
-        .leaflet-popup-content-wrapper {
-          background: rgba(15, 19, 34, 0.95);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: white;
-          border-radius: 12px;
-        }
-        
-        .leaflet-popup-tip {
-          background: rgba(15, 19, 34, 0.95);
-        }
-        
-        .user-marker {
-          background: transparent;
-          border: none;
-        }
-      `}</style>
-
-      {/* Load Leaflet */}
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" async></script>
     </Layout>
   );
 };

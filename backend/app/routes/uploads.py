@@ -129,7 +129,7 @@ async def generate_presign_url(current_user = Depends(get_current_user)):
     try:
         user_id = str(current_user["_id"])
         
-        # ✅ Validation 1: Check photo limit (max 6)
+        # [OK] Validation 1: Check photo limit (max 6)
         photo_count = await get_user_photo_count(user_id)
         if photo_count >= 6:
             raise HTTPException(
@@ -137,14 +137,14 @@ async def generate_presign_url(current_user = Depends(get_current_user)):
                 detail="Maximum 6 photos allowed"
             )
         
-        # ✅ Validation 2: Check rate limit (10 uploads/hour)
+        # [OK] Validation 2: Check rate limit (10 uploads/hour)
         if not await check_upload_rate_limit(user_id):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Upload rate limit exceeded. Try again later."
             )
         
-        # ✅ Check Cloudinary configuration
+        # [OK] Check Cloudinary configuration
         if not settings.CLOUDINARY_CLOUD_NAME or not settings.CLOUDINARY_API_KEY:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -212,7 +212,7 @@ async def complete_upload(
     try:
         user_id = str(current_user["_id"])
         
-        # ✅ Validation 1: Verify public_id belongs to user
+        # [OK] Validation 1: Verify public_id belongs to user
         expected_prefix = f"alivv/users/{user_id}/"
         if not request.public_id.startswith(expected_prefix):
             raise HTTPException(
@@ -220,7 +220,7 @@ async def complete_upload(
                 detail="Unauthorized photo upload"
             )
         
-        # ✅ Validation 2: Check for duplicate URL
+        # [OK] Validation 2: Check for duplicate URL
         user = await db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise HTTPException(
@@ -235,7 +235,7 @@ async def complete_upload(
                 detail="Photo already uploaded"
             )
         
-        # ✅ Validation 3: Check photo limit again (race condition protection)
+        # [OK] Validation 3: Check photo limit again (race condition protection)
         if len(existing_photos) >= 6:
             # Delete uploaded photo from Cloudinary
             try:
@@ -249,7 +249,7 @@ async def complete_upload(
                 detail="Maximum 6 photos allowed"
             )
         
-        # ✅ Update user profile - add photo to array
+        # [OK] Update user profile - add photo to array
         result = await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {
@@ -305,7 +305,7 @@ async def delete_photo(
     try:
         user_id = str(current_user["_id"])
         
-        # ✅ Get user and validate photo exists
+        # [OK] Get user and validate photo exists
         user = await db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise HTTPException(
@@ -322,7 +322,7 @@ async def delete_photo(
         
         photo_url = photos[photo_index]
         
-        # ✅ Extract public_id from Cloudinary URL
+        # [OK] Extract public_id from Cloudinary URL
         # URL format: https://res.cloudinary.com/{cloud_name}/image/upload/{public_id}.{format}
         try:
             # Extract public_id from URL
@@ -335,7 +335,7 @@ async def delete_photo(
             else:
                 raise ValueError("Invalid Cloudinary URL format")
             
-            # ✅ Verify public_id belongs to user
+            # [OK] Verify public_id belongs to user
             expected_prefix = f"alivv/users/{user_id}/"
             if not public_id.startswith(expected_prefix):
                 raise HTTPException(
@@ -343,7 +343,7 @@ async def delete_photo(
                     detail="Unauthorized photo deletion"
                 )
             
-            # ✅ Delete from Cloudinary
+            # [OK] Delete from Cloudinary
             delete_result = cloudinary.uploader.destroy(public_id)
             logger.info(f"Cloudinary delete result: {delete_result}")
             
@@ -351,7 +351,7 @@ async def delete_photo(
             logger.error(f"Failed to delete from Cloudinary: {str(e)}")
             # Continue to remove from DB even if Cloudinary delete fails
         
-        # ✅ Remove from user profile
+        # [OK] Remove from user profile
         result = await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {

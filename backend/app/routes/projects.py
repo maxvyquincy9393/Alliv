@@ -4,7 +4,7 @@ Handles: Project creation, discovery, applications, team management
 """
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 from datetime import datetime
 from bson import ObjectId
 from pymongo.errors import PyMongoError
@@ -12,12 +12,103 @@ import logging
 
 from ..config import settings
 from ..auth import get_current_user
-from .. import db
+from ..db import get_db
+from ..email_utils import send_email
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+
+
+# ===== HELPER FUNCTIONS =====
+async def send_project_notification(
+    project_id: str,
+    notification_type: Literal["application_received", "application_accepted", "application_rejected", "team_member_removed", "project_updated", "project_deleted"],
+    recipient_ids: List[str],
+    extra_data: Optional[Dict] = None
+):
+    """Send project-related email notifications"""
+    try:
+        db = get_db()
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+        if not project:
+            return
+        
+        # Get recipient users
+        users = await db.users.find({"_id": {"$in": [ObjectId(uid) for uid in recipient_ids]}}).to_list(None)
+        
+        for user in users:
+            if not user.get('email'):
+                continue
+                
+            project_title = project['title']
+            
+            # Email templates based on type
+            if notification_type == "application_received":
+                applicant_name = extra_data.get('applicant_name', 'Someone') if extra_data else 'Someone'
+                subject = f"📬 New Application: {project_title}"
+                body = f"""
+                <h2>New Project Application</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p><strong>{applicant_name}</strong> has applied to join your project <strong>{project_title}</strong>.</p>
+                <p>Review their application and cover letter in your project dashboard.</p>
+                """
+            
+            elif notification_type == "application_accepted":
+                subject = f"[SUCCESS] Application Accepted: {project_title}"
+                body = f"""
+                <h2>Congratulations!</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p>Your application to join <strong>{project_title}</strong> has been accepted!</p>
+                <p>You're now part of the team. Check the project page for next steps.</p>
+                """
+            
+            elif notification_type == "application_rejected":
+                subject = f"Application Update: {project_title}"
+                body = f"""
+                <h2>Application Update</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p>Thank you for your interest in <strong>{project_title}</strong>.</p>
+                <p>Unfortunately, the team has decided to move forward with other candidates at this time.</p>
+                <p>Don't give up! There are many other exciting projects waiting for your skills.</p>
+                """
+            
+            elif notification_type == "team_member_removed":
+                subject = f"Team Update: {project_title}"
+                body = f"""
+                <h2>Team Update</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p>You've been removed from the project <strong>{project_title}</strong>.</p>
+                <p>Thank you for your contributions to the team.</p>
+                """
+            
+            elif notification_type == "project_updated":
+                subject = f"[NOTE] Project Updated: {project_title}"
+                body = f"""
+                <h2>Project Details Updated</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p>The details for <strong>{project_title}</strong> have been updated.</p>
+                <p>Check the project page for the latest information.</p>
+                """
+            
+            elif notification_type == "project_deleted":
+                subject = f"[ERROR] Project Cancelled: {project_title}"
+                body = f"""
+                <h2>Project Cancelled</h2>
+                <p>Hi {user.get('name', 'there')},</p>
+                <p>The project <strong>{project_title}</strong> has been cancelled.</p>
+                <p>Thank you for your interest and participation.</p>
+                """
+            
+            else:
+                continue
+            
+            await send_email(user['email'], subject, body)
+            
+    except Exception as e:
+        logger.error(f"Failed to send project notification: {str(e)}")
+        # Don't raise - email failures shouldn't block the main operation
 
 
 # ===== MODELS =====
@@ -56,7 +147,7 @@ async def create_project(
     Create a new project with comprehensive error handling
     """
     try:
-        # ✅ Validate input data
+        # [OK] Validate input data
         if len(data.title.strip()) < 3:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -87,7 +178,7 @@ async def create_project(
             "updatedAt": datetime.utcnow()
         }
         
-        result = await db.projects().insert_one(project_doc)
+        result = await get_db().projects.insert_one(project_doc)
         
         return {
             "projectId": str(result.inserted_id),
@@ -97,7 +188,7 @@ async def create_project(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in create_project: {str(e)}")
+        logger.error(f"[ERROR] Database error in create_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
@@ -108,7 +199,7 @@ async def create_project(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in create_project: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in create_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create project"
@@ -134,10 +225,10 @@ async def list_projects(
         if status:
             query["status"] = status
         
-        projects_cursor = db.projects().find(query).sort("createdAt", -1).limit(limit)
+        projects_cursor = get_db().projects.find(query).sort("createdAt", -1).limit(limit)
         projects = await projects_cursor.to_list(length=limit)
         
-        # ✅ Handle empty results
+        # [OK] Handle empty results
         if not projects:
             return {
                 "projects": [],
@@ -149,7 +240,7 @@ async def list_projects(
         projects_list = []
         for project in projects:
             try:
-                owner = await db.profiles().find_one({"userId": project["ownerId"]})
+                owner = await get_db().profiles.find_one({"userId": project["ownerId"]})
                 
                 projects_list.append({
                     "id": str(project["_id"]),
@@ -171,7 +262,7 @@ async def list_projects(
                     "createdAt": project["createdAt"].isoformat()
                 })
             except Exception as e:
-                logger.error(f"❌ Error processing project {project.get('_id')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing project {project.get('_id')}: {str(e)}")
                 continue  # Skip this project
         
         return {
@@ -182,13 +273,13 @@ async def list_projects(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in list_projects: {str(e)}")
+        logger.error(f"[ERROR] Database error in list_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in list_projects: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in list_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve projects"
@@ -204,7 +295,7 @@ async def get_project_detail(
     Get detailed project information with error handling
     """
     try:
-        # ✅ Validate projectId format
+        # [OK] Validate projectId format
         try:
             project_oid = ObjectId(projectId)
         except Exception:
@@ -213,7 +304,7 @@ async def get_project_detail(
                 detail="Invalid project ID format"
             )
         
-        project = await db.projects().find_one({"_id": project_oid})
+        project = await get_db().projects.find_one({"_id": project_oid})
         
         if not project:
             raise HTTPException(
@@ -222,13 +313,13 @@ async def get_project_detail(
             )
         
         # Get owner profile
-        owner = await db.profiles().find_one({"userId": project["ownerId"]})
+        owner = await get_db().profiles.find_one({"userId": project["ownerId"]})
         
         # Get members profiles
         members_list = []
         for user_id in project.get("members", []):
             try:
-                profile = await db.profiles().find_one({"userId": user_id})
+                profile = await get_db().profiles.find_one({"userId": user_id})
                 if profile:
                     members_list.append({
                         "id": str(user_id),
@@ -238,7 +329,7 @@ async def get_project_detail(
                         "skills": profile.get("skills", [])
                     })
             except Exception as e:
-                logger.error(f"❌ Error loading member {user_id}: {str(e)}")
+                logger.error(f"[ERROR] Error loading member {user_id}: {str(e)}")
                 continue
         
         # Check if current user already applied
@@ -278,13 +369,13 @@ async def get_project_detail(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in get_project_detail: {str(e)}")
+        logger.error(f"[ERROR] Database error in get_project_detail: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in get_project_detail: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in get_project_detail: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve project details"
@@ -317,7 +408,7 @@ async def apply_to_project(
                 detail="Application message too long (max 1000 characters)"
             )
         
-        project = await db.projects().find_one({"_id": project_oid})
+        project = await get_db().projects.find_one({"_id": project_oid})
         
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -347,12 +438,21 @@ async def apply_to_project(
             "appliedAt": datetime.utcnow()
         }
         
-        await db.projects().update_one(
+        await get_db().projects.update_one(
             {"_id": project_oid},
             {"$push": {"applications": application}}
         )
         
-        logger.info(f"✅ User {user_id} applied to project {projectId}")
+        # Send email notification to project owner
+        profile = await get_db().profiles.find_one({"userId": user_id})
+        await send_project_notification(
+            projectId,
+            "application_received",
+            [str(project["ownerId"])],
+            {"applicant_name": profile.get("name", "Someone") if profile else "Someone"}
+        )
+        
+        logger.info(f"[OK] User {user_id} applied to project {projectId}")
         
         return {
             "message": "Application submitted successfully",
@@ -362,7 +462,7 @@ async def apply_to_project(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in apply_to_project: {str(e)}")
+        logger.error(f"[ERROR] Database error in apply_to_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
@@ -373,7 +473,7 @@ async def apply_to_project(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in apply_to_project: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in apply_to_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to submit application"
@@ -408,7 +508,7 @@ async def review_application(
                 detail="Invalid user ID format"
             )
         
-        project = await db.projects().find_one({"_id": project_oid})
+        project = await get_db().projects.find_one({"_id": project_oid})
         
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -429,7 +529,7 @@ async def review_application(
         
         if action == "accept":
             # Add to members
-            await db.projects().update_one(
+            await get_db().projects.update_one(
                 {"_id": project_oid},
                 {
                     "$push": {"members": applicant_id},
@@ -437,23 +537,37 @@ async def review_application(
                 }
             )
             
-            logger.info(f"✅ Application accepted for project {projectId}, user {userId}")
+            # Send acceptance email
+            await send_project_notification(
+                projectId,
+                "application_accepted",
+                [userId]
+            )
+            
+            logger.info(f"[OK] Application accepted for project {projectId}, user {userId}")
             return {"message": "Application accepted", "userId": userId}
         
         else:  # reject
             # Remove application
-            await db.projects().update_one(
+            await get_db().projects.update_one(
                 {"_id": project_oid},
                 {"$pull": {"applications": {"userId": applicant_id}}}
             )
             
-            logger.info(f"✅ Application rejected for project {projectId}, user {userId}")
+            # Send rejection email
+            await send_project_notification(
+                projectId,
+                "application_rejected",
+                [userId]
+            )
+            
+            logger.info(f"[OK] Application rejected for project {projectId}, user {userId}")
             return {"message": "Application rejected", "userId": userId}
     
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in review_application: {str(e)}")
+        logger.error(f"[ERROR] Database error in review_application: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
@@ -464,7 +578,7 @@ async def review_application(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in review_application: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in review_application: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to review application"
@@ -479,7 +593,7 @@ async def my_owned_projects(
     Get projects owned by current user
     """
     try:
-        projects_cursor = db.projects().find(
+        projects_cursor = get_db().projects.find(
             {"ownerId": current_user["_id"]}
         ).sort("createdAt", -1)
         
@@ -505,7 +619,7 @@ async def my_owned_projects(
                     "createdAt": project["createdAt"].isoformat() if "createdAt" in project else None
                 })
             except Exception as e:
-                logger.error(f"❌ Error processing owned project {project.get('_id')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing owned project {project.get('_id')}: {str(e)}")
                 continue  # Skip corrupted project
         
         return {
@@ -516,13 +630,13 @@ async def my_owned_projects(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in my_owned_projects: {str(e)}")
+        logger.error(f"[ERROR] Database error in my_owned_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in my_owned_projects: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in my_owned_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve owned projects"
@@ -539,7 +653,7 @@ async def my_joined_projects(
     try:
         user_id = current_user["_id"]
         
-        projects_cursor = db.projects().find({
+        projects_cursor = get_db().projects.find({
             "members": user_id,
             "ownerId": {"$ne": user_id}  # Exclude owned projects
         }).sort("createdAt", -1)
@@ -556,7 +670,7 @@ async def my_joined_projects(
         projects_list = []
         for project in projects:
             try:
-                owner = await db.profiles().find_one({"userId": project["ownerId"]})
+                owner = await get_db().profiles.find_one({"userId": project["ownerId"]})
                 
                 projects_list.append({
                     "id": str(project["_id"]),
@@ -569,7 +683,7 @@ async def my_joined_projects(
                     "membersCount": len(project.get("members", []))
                 })
             except Exception as e:
-                logger.error(f"❌ Error processing joined project {project.get('_id')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing joined project {project.get('_id')}: {str(e)}")
                 continue  # Skip corrupted project
         
         return {
@@ -580,13 +694,13 @@ async def my_joined_projects(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in my_joined_projects: {str(e)}")
+        logger.error(f"[ERROR] Database error in my_joined_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in my_joined_projects: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in my_joined_projects: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve joined projects"
@@ -612,7 +726,7 @@ async def update_project(
                 detail="Invalid project ID format"
             )
         
-        project = await db.projects().find_one({"_id": project_oid})
+        project = await get_db().projects.find_one({"_id": project_oid})
         
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -649,18 +763,28 @@ async def update_project(
         update_data["updatedAt"] = datetime.utcnow()
         
         if len(update_data) > 1:  # More than just updatedAt
-            await db.projects().update_one(
+            await get_db().projects.update_one(
                 {"_id": project_oid},
                 {"$set": update_data}
             )
-            logger.info(f"✅ Project {projectId} updated successfully")
+            
+            # Notify all team members except owner
+            members = [str(uid) for uid in project.get("members", []) if str(uid) != str(current_user["_id"])]
+            if members:
+                await send_project_notification(
+                    projectId,
+                    "project_updated",
+                    members
+                )
+            
+            logger.info(f"[OK] Project {projectId} updated successfully")
         
         return {"message": "Project updated successfully"}
     
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in update_project: {str(e)}")
+        logger.error(f"[ERROR] Database error in update_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
@@ -671,7 +795,7 @@ async def update_project(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in update_project: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in update_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update project"
@@ -696,7 +820,7 @@ async def delete_project(
                 detail="Invalid project ID format"
             )
         
-        project = await db.projects().find_one({"_id": project_oid})
+        project = await get_db().projects.find_one({"_id": project_oid})
         
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -705,22 +829,37 @@ async def delete_project(
         if project["ownerId"] != current_user["_id"]:
             raise HTTPException(status_code=403, detail="Only owner can delete project")
         
-        await db.projects().delete_one({"_id": project_oid})
+        # Notify all team members and pending applicants
+        members = [str(uid) for uid in project.get("members", []) if str(uid) != str(current_user["_id"])]
+        pending_applicants = [str(app["userId"]) for app in project.get("applications", []) if app["status"] == "pending"]
+        all_affected = members + pending_applicants
         
-        logger.info(f"✅ Project {projectId} deleted successfully")
+        if all_affected:
+            await send_project_notification(
+                projectId,
+                "project_deleted",
+                all_affected
+            )
         
-        return {"message": "Project deleted successfully"}
+        await get_db().projects.delete_one({"_id": project_oid})
+        
+        logger.info(f"[OK] Project {projectId} deleted successfully")
+        
+        return {
+            "message": "Project deleted successfully",
+            "notifiedUsers": len(all_affected)
+        }
     
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in delete_project: {str(e)}")
+        logger.error(f"[ERROR] Database error in delete_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in delete_project: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in delete_project: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete project"

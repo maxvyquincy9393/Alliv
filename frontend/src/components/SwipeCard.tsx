@@ -57,7 +57,7 @@ export const SwipeCard = ({ user, onSwipe, style }: SwipeCardProps) => {
                   clipRule="evenodd"
                 />
               </svg>
-              {user.location}
+              {typeof user.location === 'string' ? user.location : user.location.city}
             </p>
           )}
           <p className="text-sm text-white/70 mb-4 line-clamp-2">{user.bio}</p>

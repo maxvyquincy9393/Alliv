@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
+import { PasswordInput } from '../components/PasswordInput';
 
 export const Register = () => {
   const [name, setName] = useState('');
@@ -39,43 +40,85 @@ export const Register = () => {
     }
 
     try {
-      // Step 1: Register user (OLD endpoint - creates user without sending email)
-      const registerResponse = await authAPI.register({
-        name,
-        email,
-        password,
-        birthdate: '' // Optional
-      });
-
-      if (registerResponse.error) {
-        throw new Error(registerResponse.error);
-      }
-
-      // Step 2: Request verification code (NEW production endpoint)
-      const verifyResponse = await authAPI.requestVerification({ email });
+      console.log('🚀 Starting registration:', { name, email });
+      console.log('📝 Step 1: Creating timeout wrapper...');
       
-      if (verifyResponse.error) {
-        console.warn('Failed to send verification email, but registration succeeded');
-      }
+      // Create timeout wrapper
+      const withTimeout = (promise: Promise<any>, timeoutMs: number = 30000) => {
+        console.log('⏱️ Timeout wrapper created with', timeoutMs, 'ms');
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Request timeout - server not responding')), timeoutMs)
+          )
+        ]);
+      };
 
-      // Step 3: Navigate to verification page
-      navigate('/verify-email', {
-        state: {
-          email: email,
-          fromRegister: true
+      // Step 1: Register user
+      console.log('📝 Step 2: Calling register API...');
+      console.log('API Data:', { name, email, password: '***', birthdate: '' });
+      
+      try {
+        const registerResponse = await withTimeout(
+          authAPI.register({
+            name,
+            email,
+            password,
+            birthdate: '' // Optional
+          })
+        );
+
+        console.log('✅ Register response:', registerResponse);
+
+        if (registerResponse.error) {
+          throw new Error(registerResponse.error);
         }
-      });
+
+        // Step 2: Request verification code
+        console.log('📧 Requesting verification email...');
+        const verifyResponse = await withTimeout(
+          authAPI.requestVerification({ email })
+        );
+        
+        console.log('✅ Verify response:', verifyResponse);
+        
+        if (verifyResponse.error) {
+          console.warn('⚠️ Failed to send verification email, but registration succeeded');
+        }
+
+        // Step 3: Navigate to verification page
+        console.log('🎯 Navigating to verify-email page...');
+        navigate('/verify-email', {
+          state: {
+            email: email,
+            fromRegister: true
+          },
+          replace: true
+        });
+      } catch (innerErr) {
+        console.error('💥 Inner error during API calls:', innerErr);
+        throw innerErr; // Re-throw to outer catch
+      }
 
     } catch (err: any) {
-      console.error('Registration error:', err);
+      console.error('❌ Registration error:', err);
+      console.error('Error details:', {
+        message: err?.message,
+        stack: err?.stack,
+        fullError: err
+      });
+      
       if (err?.message?.includes('already registered')) {
         setError('Email already registered. Please login instead.');
+      } else if (err?.message?.includes('timeout')) {
+        setError('Server not responding. Please try again or check your connection.');
       } else if (err?.message) {
         setError(err.message);
       } else {
         setError('Registration failed. Please try again.');
       }
     } finally {
+      console.log('🏁 Registration process completed');
       setLoading(false);
     }
   };
@@ -141,12 +184,11 @@ export const Register = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
                 placeholder="Min 8 chars, uppercase, lowercase, digit"
+                autoComplete="new-password"
                 required
               />
               <p className="mt-1 text-xs text-gray-500">

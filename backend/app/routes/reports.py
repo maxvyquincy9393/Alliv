@@ -11,7 +11,7 @@ from bson import ObjectId
 import logging
 
 from ..auth import get_current_user
-from .. import db
+from ..db import get_db
 from ..email_utils import send_email
 from ..config import settings
 
@@ -38,7 +38,7 @@ class ReportResolve(BaseModel):
 
 async def is_admin(user_id: ObjectId) -> bool:
     """Check if user has admin role"""
-    user = await db.users().find_one({"_id": user_id})
+    user = await get_db().users.find_one({"_id": user_id})
     return user and user.get("role") == "admin"
 
 
@@ -53,13 +53,13 @@ async def check_and_apply_auto_action(target_user_id: ObjectId):
     """
     try:
         # Count unresolved reports against this user
-        report_count = await db.reports().count_documents({
+        report_count = await get_db().reports.count_documents({
             "targetId": target_user_id,
             "status": {"$in": ["pending", "reviewing"]},
             "action": {"$ne": "dismiss"}
         })
         
-        user = await db.users().find_one({"_id": target_user_id})
+        user = await get_db().users.find_one({"_id": target_user_id})
         if not user:
             return
         
@@ -68,7 +68,7 @@ async def check_and_apply_auto_action(target_user_id: ObjectId):
         
         if report_count >= 5:
             # Permanent ban
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": target_user_id},
                 {
                     "$set": {
@@ -100,7 +100,7 @@ async def check_and_apply_auto_action(target_user_id: ObjectId):
         elif report_count >= 3:
             # 7-day suspension
             suspension_until = datetime.utcnow() + timedelta(days=7)
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": target_user_id},
                 {
                     "$set": {
@@ -115,7 +115,7 @@ async def check_and_apply_auto_action(target_user_id: ObjectId):
             # Send suspension email
             await send_email(
                 to=email,
-                subject="⚠️ Account Suspended - COLABMATCH",
+                subject="[WARN] Account Suspended - COLABMATCH",
                 html=f"""
                 <h2>Account Temporarily Suspended</h2>
                 <p>Dear {name},</p>
@@ -134,7 +134,7 @@ async def check_and_apply_auto_action(target_user_id: ObjectId):
             # First warning
             await send_email(
                 to=email,
-                subject="⚠️ Community Guidelines Warning - COLABMATCH",
+                subject="[WARN] Community Guidelines Warning - COLABMATCH",
                 html=f"""
                 <h2>Community Guidelines Warning</h2>
                 <p>Dear {name},</p>
@@ -174,7 +174,7 @@ async def apply_manual_action(
     - dismiss: No action (false report)
     """
     try:
-        user = await db.users().find_one({"_id": target_user_id})
+        user = await get_db().users.find_one({"_id": target_user_id})
         if not user:
             raise HTTPException(status_code=404, detail="Target user not found")
         
@@ -185,7 +185,7 @@ async def apply_manual_action(
             # Send official warning
             await send_email(
                 to=email,
-                subject="⚠️ Official Warning - COLABMATCH",
+                subject="[WARN] Official Warning - COLABMATCH",
                 html=f"""
                 <h2>Official Warning</h2>
                 <p>Dear {name},</p>
@@ -202,7 +202,7 @@ async def apply_manual_action(
         elif action == "suspension":
             # Suspend account
             suspension_until = datetime.utcnow() + timedelta(days=suspension_days)
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": target_user_id},
                 {
                     "$set": {
@@ -233,7 +233,7 @@ async def apply_manual_action(
             
         elif action == "ban":
             # Permanent ban
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": target_user_id},
                 {
                     "$set": {
@@ -271,12 +271,12 @@ async def apply_manual_action(
 async def update_trust_score_for_report(target_user_id: ObjectId, decrease: int = 10):
     """Decrease target user's trust score after receiving a report"""
     try:
-        profile = await db.profiles().find_one({"userId": str(target_user_id)})
+        profile = await get_db().profiles.find_one({"userId": str(target_user_id)})
         if profile:
             current_score = profile.get("trustScore", 50)
             new_score = max(0, current_score - decrease)  # Don't go below 0
             
-            await db.profiles().update_one(
+            await get_db().profiles.update_one(
                 {"userId": str(target_user_id)},
                 {
                     "$set": {
@@ -316,7 +316,7 @@ async def submit_report(
             raise HTTPException(status_code=400, detail="Invalid target user ID")
         
         # Check target user exists
-        target_user = await db.users().find_one({"_id": target_oid})
+        target_user = await get_db().users.find_one({"_id": target_oid})
         if not target_user:
             raise HTTPException(status_code=404, detail="Target user not found")
         
@@ -325,7 +325,7 @@ async def submit_report(
             raise HTTPException(status_code=400, detail="Cannot report yourself")
         
         # Check for duplicate report (same reporter, same target, same context, within 7 days)
-        existing_report = await db.reports().find_one({
+        existing_report = await get_db().reports.find_one({
             "reporterId": reporter_id,
             "targetId": target_oid,
             "context": data.context,
@@ -354,7 +354,7 @@ async def submit_report(
             "resolvedAt": None
         }
         
-        result = await db.reports().insert_one(report_doc)
+        result = await get_db().reports.insert_one(report_doc)
         report_id = str(result.inserted_id)
         
         # Update target user's trust score (-10)
@@ -407,22 +407,22 @@ async def list_reports(
             query["type"] = type_filter
         
         # Fetch reports
-        reports_cursor = db.reports().find(query).sort("createdAt", -1).skip(skip).limit(limit)
+        reports_cursor = get_db().reports.find(query).sort("createdAt", -1).skip(skip).limit(limit)
         reports = await reports_cursor.to_list(length=limit)
         
         # Get total count
-        total = await db.reports().count_documents(query)
+        total = await get_db().reports.count_documents(query)
         
         # Populate user info
         enriched_reports = []
         for report in reports:
             # Get reporter info
-            reporter = await db.users().find_one({"_id": report["reporterId"]})
-            reporter_profile = await db.profiles().find_one({"userId": str(report["reporterId"])})
+            reporter = await get_db().users.find_one({"_id": report["reporterId"]})
+            reporter_profile = await get_db().profiles.find_one({"userId": str(report["reporterId"])})
             
             # Get target info
-            target = await db.users().find_one({"_id": report["targetId"]})
-            target_profile = await db.profiles().find_one({"userId": str(report["targetId"])})
+            target = await get_db().users.find_one({"_id": report["targetId"]})
+            target_profile = await get_db().profiles.find_one({"userId": str(report["targetId"])})
             
             enriched_reports.append({
                 "_id": str(report["_id"]),
@@ -484,19 +484,19 @@ async def get_report_detail(
         except:
             raise HTTPException(status_code=400, detail="Invalid report ID")
         
-        report = await db.reports().find_one({"_id": report_oid})
+        report = await get_db().reports.find_one({"_id": report_oid})
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
         
         # Get full user details
-        reporter = await db.users().find_one({"_id": report["reporterId"]})
-        reporter_profile = await db.profiles().find_one({"userId": str(report["reporterId"])})
+        reporter = await get_db().users.find_one({"_id": report["reporterId"]})
+        reporter_profile = await get_db().profiles.find_one({"userId": str(report["reporterId"])})
         
-        target = await db.users().find_one({"_id": report["targetId"]})
-        target_profile = await db.profiles().find_one({"userId": str(report["targetId"])})
+        target = await get_db().users.find_one({"_id": report["targetId"]})
+        target_profile = await get_db().profiles.find_one({"userId": str(report["targetId"])})
         
         # Get report history for target user
-        target_report_count = await db.reports().count_documents({
+        target_report_count = await get_db().reports.count_documents({
             "targetId": report["targetId"],
             "status": {"$in": ["pending", "reviewing", "resolved"]}
         })
@@ -506,14 +506,14 @@ async def get_report_detail(
         if report.get("context"):
             ctx = report["context"]
             if ctx.get("matchId"):
-                match = await db.matches().find_one({"_id": ObjectId(ctx["matchId"])})
+                match = await get_db().matches.find_one({"_id": ObjectId(ctx["matchId"])})
                 if match:
                     context_details["match"] = {
                         "_id": str(match["_id"]),
                         "createdAt": match.get("createdAt").isoformat() if match.get("createdAt") else None
                     }
             if ctx.get("projectId"):
-                project = await db.projects().find_one({"_id": ObjectId(ctx["projectId"])})
+                project = await get_db().projects.find_one({"_id": ObjectId(ctx["projectId"])})
                 if project:
                     context_details["project"] = {
                         "_id": str(project["_id"]),
@@ -586,7 +586,7 @@ async def resolve_report(
         except:
             raise HTTPException(status_code=400, detail="Invalid report ID")
         
-        report = await db.reports().find_one({"_id": report_oid})
+        report = await get_db().reports.find_one({"_id": report_oid})
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
         
@@ -604,29 +604,29 @@ async def resolve_report(
         
         # If dismissed (false report), penalize reporter
         if data.action == "dismiss":
-            reporter_profile = await db.profiles().find_one({"userId": str(report["reporterId"])})
+            reporter_profile = await get_db().profiles.find_one({"userId": str(report["reporterId"])})
             if reporter_profile:
                 current_score = reporter_profile.get("trustScore", 50)
                 new_score = max(0, current_score - 5)  # -5 for false report
-                await db.profiles().update_one(
+                await get_db().profiles.update_one(
                     {"userId": str(report["reporterId"])},
                     {"$set": {"trustScore": new_score, "updatedAt": datetime.utcnow()}}
                 )
                 logger.info(f"Penalized reporter {report['reporterId']} for false report: {current_score} -> {new_score}")
         else:
             # Valid report - reward reporter
-            reporter_profile = await db.profiles().find_one({"userId": str(report["reporterId"])})
+            reporter_profile = await get_db().profiles.find_one({"userId": str(report["reporterId"])})
             if reporter_profile:
                 current_score = reporter_profile.get("trustScore", 50)
                 new_score = min(100, current_score + 2)  # +2 for valid report
-                await db.profiles().update_one(
+                await get_db().profiles.update_one(
                     {"userId": str(report["reporterId"])},
                     {"$set": {"trustScore": new_score, "updatedAt": datetime.utcnow()}}
                 )
                 logger.info(f"Rewarded reporter {report['reporterId']} for valid report: {current_score} -> {new_score}")
         
         # Update report status
-        await db.reports().update_one(
+        await get_db().reports.update_one(
             {"_id": report_oid},
             {
                 "$set": {
@@ -640,7 +640,7 @@ async def resolve_report(
         )
         
         # Send confirmation email to reporter
-        reporter = await db.users().find_one({"_id": report["reporterId"]})
+        reporter = await get_db().users.find_one({"_id": report["reporterId"]})
         if reporter:
             action_text = {
                 "warning": "warned",
@@ -701,10 +701,10 @@ async def get_user_report_history(
             raise HTTPException(status_code=400, detail="Invalid user ID")
         
         # Get reports submitted BY this user
-        reports_by_user = await db.reports().find({"reporterId": user_oid}).to_list(length=100)
+        reports_by_user = await get_db().reports.find({"reporterId": user_oid}).to_list(length=100)
         
         # Get reports AGAINST this user
-        reports_against_user = await db.reports().find({"targetId": user_oid}).to_list(length=100)
+        reports_against_user = await get_db().reports.find({"targetId": user_oid}).to_list(length=100)
         
         # Calculate statistics
         stats = {

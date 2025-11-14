@@ -14,9 +14,13 @@ from collections import defaultdict
 import time
 import urllib.parse
 import httpx
+import logging
+
+# Add logger at the top
+logger = logging.getLogger(__name__)
 
 from ..config import settings
-from .. import db
+from ..db import get_db
 from ..auth import get_current_user, oauth2_scheme, create_access_token, create_refresh_token, verify_access_token, verify_refresh_token
 from ..oauth_providers import get_oauth_user_info
 from ..email_utils import send_verification_email  # NEW: Email sending
@@ -118,9 +122,35 @@ def generate_refresh_token() -> str:
 # ===== ROUTES =====
 
 @router.options("/register")
-async def register_options():
-    """Handle CORS preflight for register endpoint"""
-    return JSONResponse(content={"status": "ok"}, status_code=200)
+async def register_options(request: Request):
+    """Handle CORS preflight for register endpoint - EXPLICIT handler"""
+    from fastapi.responses import Response
+    
+    response = Response(status_code=200)
+    origin = request.headers.get("origin", "")
+    cors_origins_str = settings.CORS_ORIGIN if hasattr(settings, 'CORS_ORIGIN') else "http://localhost:5173,http://localhost:3000"
+    cors_origins = cors_origins_str.split(',') if cors_origins_str != "*" else ["*"]
+    cors_origins = [o.strip() for o in cors_origins]
+    
+    # ALWAYS set Access-Control-Allow-Origin
+    if origin:
+        origin_stripped = origin.strip()
+        if origin_stripped in cors_origins or cors_origins_str == "*":
+            response.headers["Access-Control-Allow-Origin"] = origin_stripped if cors_origins_str != "*" else "*"
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"  # Development fallback
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    # ALWAYS set required CORS headers
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    requested_headers = request.headers.get("Access-Control-Request-Headers", "Content-Type, Authorization")
+    response.headers["Access-Control-Allow-Headers"] = requested_headers
+    response.headers["Access-Control-Max-Age"] = "3600"
+    
+    logger.info(f"OPTIONS /auth/register - CORS preflight - Origin: {origin} - Allowed: {response.headers.get('Access-Control-Allow-Origin')}")
+    return response
 
 @router.post("/register", response_model=dict)
 @limiter.limit("5/minute")
@@ -130,15 +160,13 @@ async def register(request: Request, data: RegisterRequest):
     """
     try:
         # DEBUG: Log incoming data
-        import logging
-        logger = logging.getLogger("alliv")
         logger.info(f"Registration attempt - Email: {data.email}, Name: {data.name}, Has password: {bool(data.password)}, Birthdate: {data.birthdate}")
         
         # Normalize email
         email = data.email.lower().strip()
         
         # Check if user exists (case-insensitive)
-        existing = await db.users().find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
+        existing = await get_db().users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -168,7 +196,7 @@ async def register(request: Request, data: RegisterRequest):
             "updatedAt": datetime.utcnow()
         }
         
-        result = await db.users().insert_one(user_doc)
+        result = await get_db().users.insert_one(user_doc)
         user_id = str(result.inserted_id)
         
         # Create empty profile (needs completion)
@@ -190,7 +218,7 @@ async def register(request: Request, data: RegisterRequest):
             "updatedAt": datetime.utcnow()
         }
         
-        await db.profiles().insert_one(profile_doc)
+        await get_db().profiles.insert_one(profile_doc)
         
         # Generate verification link
         verification_token = user_doc["emailVerificationToken"]
@@ -235,7 +263,7 @@ async def verify_email(token: str):
     """
     try:
         # Find user with this verification token
-        user = await db.users().find_one({
+        user = await get_db().users.find_one({
             "emailVerificationToken": token,
             "emailVerificationExpires": {"$gt": datetime.utcnow()}
         })
@@ -247,7 +275,7 @@ async def verify_email(token: str):
             )
         
         # Mark email as verified
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {
                 "$set": {
@@ -272,7 +300,7 @@ async def verify_email(token: str):
         refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$push": {"refreshTokens": {
                 "token": refresh_token,
@@ -318,38 +346,38 @@ async def verify_email_code(data: VerifyCodeRequest):
         email = data.email.lower().strip()
         code = data.code.strip()
         
-        print(f"🔍 DEBUG - Verifying email: {email}")
-        print(f"🔍 DEBUG - Code received: {code}")
+        logger.debug(f"Verifying email: {email}")
+        logger.debug(f"Code received: {code}")
         
         # First, find user by email
-        user_check = await db.users().find_one({
+        user_check = await get_db().users.find_one({
             "email": {"$regex": f"^{email}$", "$options": "i"}
         })
         
         if user_check:
-            print(f"✅ DEBUG - User found: {user_check.get('email')}")
-            print(f"🔍 DEBUG - Stored code: {user_check.get('emailVerificationCode')}")
-            print(f"🔍 DEBUG - Code expires: {user_check.get('emailVerificationExpires')}")
-            print(f"🔍 DEBUG - Current time: {datetime.utcnow()}")
+            logger.debug(f"User found: {user_check.get('email')}")
+            logger.debug(f"Stored code: {user_check.get('emailVerificationCode')}")
+            logger.debug(f"Code expires: {user_check.get('emailVerificationExpires')}")
+            logger.debug(f"Current time: {datetime.utcnow()}")
         else:
-            print(f"❌ DEBUG - No user found with email: {email}")
+            logger.debug(f"No user found with email: {email}")
         
         # Find user with this email and code
-        user = await db.users().find_one({
+        user = await get_db().users.find_one({
             "email": {"$regex": f"^{email}$", "$options": "i"},
             "emailVerificationCode": code,
             "emailVerificationExpires": {"$gt": datetime.utcnow()}
         })
         
         if not user:
-            print(f"❌ DEBUG - Verification failed. Code mismatch or expired.")
+            logger.debug(f"Verification failed. Code mismatch or expired.")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired verification code"
             )
         
         # Mark email as verified
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {
                 "$set": {
@@ -375,7 +403,7 @@ async def verify_email_code(data: VerifyCodeRequest):
         refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$push": {"refreshTokens": {
                 "token": refresh_token,
@@ -401,8 +429,6 @@ async def verify_email_code(data: VerifyCodeRequest):
     except HTTPException:
         raise
     except Exception as e:
-        import logging
-        logger = logging.getLogger("alliv")
         logger.error(f"Code verification error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -411,9 +437,25 @@ async def verify_email_code(data: VerifyCodeRequest):
 
 
 @router.options("/login")
-async def login_options():
-    """Handle CORS preflight for login endpoint"""
-    return JSONResponse(content={"status": "ok"}, status_code=200)
+async def login_options(request: Request):
+    """Handle CORS preflight for login endpoint - backup if middleware fails"""
+    from fastapi.responses import Response
+    
+    response = Response(status_code=200)
+    origin = request.headers.get("origin")
+    
+    # Allow origin if in CORS list or if CORS is set to *
+    cors_origins = settings.CORS_ORIGIN.split(',') if settings.CORS_ORIGIN != "*" else ["*"]
+    if origin and (origin in cors_origins or settings.CORS_ORIGIN == "*"):
+        response.headers["Access-Control-Allow-Origin"] = origin if settings.CORS_ORIGIN != "*" else "*"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = cors_origins[0] if cors_origins else "*"
+    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Max-Age"] = "3600"
+    return response
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
@@ -438,7 +480,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
     
     try:
         # Find user (case-insensitive)
-        user = await db.users().find_one({
+        user = await get_db().users.find_one({
             "email": {"$regex": f"^{email}$", "$options": "i"}
         })
         
@@ -474,8 +516,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             )
         
         # Verify password - CRITICAL FIX
-        from ..security import verify_password as verify_pwd
-        password_valid = verify_pwd(credentials.password, user["passwordHash"])
+        password_valid = verify_password_hash(credentials.password, user["passwordHash"])
         if not password_valid:
             record_failed_attempt(email)
             raise HTTPException(
@@ -499,7 +540,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token in database
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {
                 "$push": {
@@ -518,7 +559,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         )
         
         # Get profile completion status
-        profile = await db.profiles().find_one({"userId": user_id})
+        profile = await get_db().profiles.find_one({"userId": user_id})
         profile_complete = profile.get("profileComplete", False) if profile else False
         
         # Set refresh token in httpOnly cookie
@@ -533,23 +574,15 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         )
         
         return {
-            "accessToken": access_token,
-            "refreshToken": refresh_token,
-            "tokenType": "bearer",
-            "expiresIn": 900,
-            "user": {
-                "id": user_id,
-                "email": user["email"],
-                "name": user.get("name", ""),
-                "emailVerified": user.get("emailVerified", False),
-                "profileComplete": profile_complete  # Frontend checks this!
-            }
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": 900
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Login error: {str(e)}")  # Debug log
+        logger.error(f"Login error: {str(e)}")  # Debug log
         record_failed_attempt(email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -593,7 +626,7 @@ async def refresh_token(request: Request, response: Response):
     
     try:
         # Find user with this refresh token
-        user = await db.users().find_one({
+        user = await get_db().users.find_one({
             "refreshTokens.token": refresh_token,
             "refreshTokens.expiresAt": {"$gt": datetime.utcnow()}
         })
@@ -616,7 +649,7 @@ async def refresh_token(request: Request, response: Response):
         new_refresh_token = create_refresh_token({"sub": user_id})
         
         # Update refresh tokens in database
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {
                 "$pull": {"refreshTokens": {"token": refresh_token}},
@@ -652,7 +685,7 @@ async def refresh_token(request: Request, response: Response):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Token refresh error: {str(e)}")
+        logger.error(f"[ERROR] Token refresh error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token refresh failed - please login again"
@@ -668,7 +701,7 @@ async def logout(request: Request, response: Response, current_user: dict = Depe
         # Remove refresh token from database
         refresh_token = request.cookies.get("refresh_token")
         if refresh_token:
-            await db.users().update_one(
+            await get_db().users.update_one(
                 {"_id": current_user["_id"]},
                 {"$pull": {"refreshTokens": {"token": refresh_token}}}
             )
@@ -694,7 +727,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
     provider = data.provider.lower()
     code = data.code
     
-    if provider not in ["google", "github", "x"]:
+    if provider not in ["google", "github", "facebook", "x"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OAuth provider"
@@ -703,13 +736,17 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
     try:
         # Get OAuth credentials from settings
         if provider == "google":
-            client_id = getattr(settings, 'GOOGLE_CLIENT_ID', None)
-            client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', None)
-            redirect_uri = f"{getattr(settings, 'API_URL', 'http://localhost:8000')}/auth/oauth/google/callback"
+            client_id = settings.OAUTH_GOOGLE_ID
+            client_secret = settings.OAUTH_GOOGLE_SECRET
+            redirect_uri = f"{settings.BACKEND_URL}/auth/oauth/google/callback"
+        elif provider == "facebook":
+            client_id = settings.OAUTH_FACEBOOK_APP_ID
+            client_secret = settings.OAUTH_FACEBOOK_APP_SECRET
+            redirect_uri = f"{settings.BACKEND_URL}/auth/oauth/facebook/callback"
         elif provider == "github":
-            client_id = getattr(settings, 'GITHUB_CLIENT_ID', None)
-            client_secret = getattr(settings, 'GITHUB_CLIENT_SECRET', None)
-            redirect_uri = f"{getattr(settings, 'API_URL', 'http://localhost:8000')}/auth/oauth/github/callback"
+            client_id = settings.OAUTH_GITHUB_ID
+            client_secret = settings.OAUTH_GITHUB_SECRET
+            redirect_uri = f"{settings.BACKEND_URL}/auth/oauth/github/callback"
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -734,7 +771,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         email = oauth_user["email"].lower()
         
         # Check if user exists with this email
-        existing_user = await db.users().find_one({
+        existing_user = await get_db().users.find_one({
             "email": {"$regex": f"^{email}$", "$options": "i"}
         })
         
@@ -744,7 +781,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
             
             # Update provider info if not already linked
             if existing_user.get("provider") != provider:
-                await db.users().update_one(
+                await get_db().users.update_one(
                     {"_id": existing_user["_id"]},
                     {
                         "$set": {
@@ -781,7 +818,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
                 "updatedAt": datetime.utcnow()
             }
             
-            result = await db.users().insert_one(user_doc)
+            result = await get_db().users.insert_one(user_doc)
             user_id = str(result.inserted_id)
             
             # Create profile
@@ -801,7 +838,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
                 "updatedAt": datetime.utcnow()
             }
             
-            await db.profiles().insert_one(profile_doc)
+            await get_db().profiles.insert_one(profile_doc)
         
         # Generate tokens
         access_token = create_access_token({
@@ -813,7 +850,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         refresh_token = generate_refresh_token()
         
         # Store refresh token
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": existing_user["_id"] if existing_user else result.inserted_id},
             {
                 "$push": {
@@ -877,7 +914,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
             detail="Cannot connect to OAuth provider - network error"
         )
     except Exception as e:
-        print(f"❌ Unexpected OAuth error: {str(e)}")
+        logger.error(f"[ERROR] Unexpected OAuth error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="OAuth authentication failed - unexpected error"
@@ -933,45 +970,384 @@ async def github_oauth_redirect():
 
 
 @router.get("/oauth/google/callback")
-async def google_oauth_callback(code: str, response: Response):
+async def google_oauth_callback(
+    code: str, 
+    response: Response,
+    state: Optional[str] = None,
+    error: Optional[str] = None
+):
     """
-    Handle Google OAuth callback
+    Handle Google OAuth callback - PRODUCTION IMPLEMENTATION
+    
+    Flow:
+    1. User authorizes on Google
+    2. Google redirects here with code
+    3. Exchange code for access token
+    4. Fetch user profile from Google
+    5. Create/update user in database
+    6. Generate JWT and redirect to frontend
     """
-    # Mock implementation for development
-    # In production, exchange code for tokens and get user info from Google
+    import logging
+    logger = logging.getLogger("alliv")
     
-    frontend_url = "http://localhost:3000"
+    # Handle OAuth errors
+    if error:
+        logger.error(f"Google OAuth error: {error}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=oauth_denied"
+        return RedirectResponse(url=error_url)
     
-    # Create mock user for demo
-    mock_user = {
-        "email": "demo.google@alliv.com",
-        "name": "Google Demo User",
-        "provider": "google",
-        "emailVerified": True,
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
-    }
+    try:
+        # Get OAuth credentials
+        client_id = settings.OAUTH_GOOGLE_ID
+        client_secret = settings.OAUTH_GOOGLE_SECRET
+        redirect_uri = f"{settings.BACKEND_URL}/auth/oauth/google/callback"
+        
+        if not client_id or not client_secret:
+            logger.error("Google OAuth credentials not configured")
+            error_url = f"{settings.FRONTEND_URL}/login?error=config_error"
+            return RedirectResponse(url=error_url)
+        
+        # Exchange code for token and get user info
+        from ..oauth_providers import get_oauth_user_info
+        oauth_user = await get_oauth_user_info(
+            provider="google",
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
+        
+        email = oauth_user["email"].lower().strip()
+        name = oauth_user["name"]
+        provider_id = oauth_user["provider_id"]
+        picture_url = oauth_user.get("avatar")
+        
+        # Check if user exists
+        existing_user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"}
+        })
+        
+        if existing_user:
+            # Update existing user with Google OAuth info
+            user_id = str(existing_user["_id"])
+            
+            await get_db().users.update_one(
+                {"_id": existing_user["_id"]},
+                {
+                    "$set": {
+                        "oauth.google": {
+                            "id": provider_id,
+                            "connectedAt": datetime.utcnow()
+                        },
+                        "emailVerified": True,
+                        "emailVerifiedAt": datetime.utcnow(),
+                        "lastLogin": datetime.utcnow(),
+                        "updatedAt": datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Update profile photo if not set
+            profile = await get_db().profiles.find_one({"userId": user_id})
+            if profile and picture_url and not profile.get("photos"):
+                await get_db().profiles.update_one(
+                    {"userId": user_id},
+                    {"$set": {"photos": [picture_url], "updatedAt": datetime.utcnow()}}
+                )
+        else:
+            # Create new user from Google OAuth
+            user_doc = {
+                "email": email,
+                "passwordHash": None,  # No password for OAuth users
+                "name": name,
+                "provider": "google",
+                "providerId": provider_id,
+                "oauth": {
+                    "google": {
+                        "id": provider_id,
+                        "connectedAt": datetime.utcnow()
+                    }
+                },
+                "emailVerified": True,
+                "emailVerifiedAt": datetime.utcnow(),
+                "roles": ["user"],
+                "active": True,
+                "lastLogin": datetime.utcnow(),
+                "refreshTokens": [],
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow()
+            }
+            
+            result = await get_db().users.insert_one(user_doc)
+            user_id = str(result.inserted_id)
+            
+            # Create profile with Google photo
+            profile_doc = {
+                "userId": user_id,
+                "name": name,
+                "bio": "",
+                "photos": [picture_url] if picture_url else [],
+                "skills": [],
+                "interests": [],
+                "goals": "",
+                "category": "",
+                "location": {},
+                "visibility": "public",
+                "profileComplete": False,  # Still needs completion
+                "trustScore": 60,  # Higher base for OAuth users
+                "completionScore": 20,  # Photo + email verified
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow()
+            }
+            
+            await get_db().profiles.insert_one(profile_doc)
+        
+        # Generate JWT access token
+        access_token = create_access_token({
+            "sub": user_id,
+            "email": email,
+            "verified": True
+        })
+        
+        # Generate refresh token
+        refresh_token = generate_refresh_token()
+        
+        # Store refresh token
+        from slowapi.util import get_remote_address
+        from fastapi import Request
+        
+        await get_db().users.update_one(
+            {"_id": existing_user["_id"] if existing_user else result.inserted_id},
+            {
+                "$push": {
+                    "refreshTokens": {
+                        "token": refresh_token,
+                        "createdAt": datetime.utcnow(),
+                        "expiresAt": datetime.utcnow() + timedelta(days=14),
+                        "userAgent": "OAuth",
+                        "ipAddress": "OAuth"
+                    }
+                }
+            }
+        )
+        
+        # Set refresh token cookie
+        response_redirect = RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/auth/callback?token={access_token}&provider=google"
+        )
+        response_redirect.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+            path="/auth"
+        )
+        
+        return response_redirect
+        
+    except HTTPException as e:
+        logger.error(f"Google OAuth HTTPException: {e.detail}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=oauth_failed"
+        return RedirectResponse(url=error_url)
+    except Exception as e:
+        logger.error(f"Google OAuth unexpected error: {str(e)}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=server_error"
+        return RedirectResponse(url=error_url)
+
+
+@router.get("/oauth/facebook/callback")
+async def facebook_oauth_callback(
+    code: str, 
+    response: Response,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None
+):
+    """
+    Handle Facebook OAuth callback - PRODUCTION IMPLEMENTATION
     
-    # Check if user exists
-    existing_user = await db.users().find_one({"email": mock_user["email"]})
+    Flow:
+    1. User authorizes on Facebook
+    2. Facebook redirects here with code
+    3. Exchange code for access token
+    4. Fetch user profile from Facebook
+    5. Create/update user in database
+    6. Generate JWT and redirect to frontend
+    """
+    import logging
+    logger = logging.getLogger("alliv")
     
-    if existing_user:
-        user_id = str(existing_user["_id"])
-    else:
-        result = await db.users().insert_one(mock_user)
-        user_id = str(result.inserted_id)
+    # Handle OAuth errors
+    if error:
+        logger.error(f"Facebook OAuth error: {error} - {error_description}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=oauth_denied"
+        return RedirectResponse(url=error_url)
     
-    # Generate token
-    access_token = create_access_token({
-        "sub": user_id,
-        "email": mock_user["email"],
-        "verified": True
-    })
-    
-    # Redirect to frontend with token
-    return RedirectResponse(
-        url=f"{frontend_url}/home?token={access_token}&provider=google"
-    )
+    try:
+        # Get OAuth credentials
+        client_id = settings.OAUTH_FACEBOOK_APP_ID
+        client_secret = settings.OAUTH_FACEBOOK_APP_SECRET
+        redirect_uri = f"{settings.BACKEND_URL}/auth/oauth/facebook/callback"
+        
+        if not client_id or not client_secret:
+            logger.error("Facebook OAuth credentials not configured")
+            error_url = f"{settings.FRONTEND_URL}/login?error=config_error"
+            return RedirectResponse(url=error_url)
+        
+        # Exchange code for token and get user info
+        from ..oauth_providers import get_oauth_user_info
+        oauth_user = await get_oauth_user_info(
+            provider="facebook",
+            code=code,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
+        
+        email = oauth_user.get("email")
+        if not email:
+            # Facebook requires email permission
+            logger.error("Facebook did not provide user email")
+            error_url = f"{settings.FRONTEND_URL}/login?error=no_email"
+            return RedirectResponse(url=error_url)
+        
+        email = email.lower().strip()
+        name = oauth_user["name"]
+        provider_id = oauth_user["provider_id"]
+        picture_url = oauth_user.get("avatar")
+        
+        # Check if user exists
+        existing_user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"}
+        })
+        
+        if existing_user:
+            # Update existing user with Facebook OAuth info
+            user_id = str(existing_user["_id"])
+            
+            await get_db().users.update_one(
+                {"_id": existing_user["_id"]},
+                {
+                    "$set": {
+                        "oauth.facebook": {
+                            "id": provider_id,
+                            "connectedAt": datetime.utcnow()
+                        },
+                        "emailVerified": True,
+                        "emailVerifiedAt": datetime.utcnow(),
+                        "lastLogin": datetime.utcnow(),
+                        "updatedAt": datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Update profile photo if not set
+            profile = await get_db().profiles.find_one({"userId": user_id})
+            if profile and picture_url and not profile.get("photos"):
+                await get_db().profiles.update_one(
+                    {"userId": user_id},
+                    {"$set": {"photos": [picture_url], "updatedAt": datetime.utcnow()}}
+                )
+        else:
+            # Create new user from Facebook OAuth
+            user_doc = {
+                "email": email,
+                "passwordHash": None,  # No password for OAuth users
+                "name": name,
+                "provider": "facebook",
+                "providerId": provider_id,
+                "oauth": {
+                    "facebook": {
+                        "id": provider_id,
+                        "connectedAt": datetime.utcnow()
+                    }
+                },
+                "emailVerified": True,
+                "emailVerifiedAt": datetime.utcnow(),
+                "roles": ["user"],
+                "active": True,
+                "lastLogin": datetime.utcnow(),
+                "refreshTokens": [],
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow()
+            }
+            
+            result = await get_db().users.insert_one(user_doc)
+            user_id = str(result.inserted_id)
+            
+            # Create profile with Facebook photo
+            profile_doc = {
+                "userId": user_id,
+                "name": name,
+                "bio": "",
+                "photos": [picture_url] if picture_url else [],
+                "skills": [],
+                "interests": [],
+                "goals": "",
+                "category": "",
+                "location": {},
+                "visibility": "public",
+                "profileComplete": False,  # Still needs completion
+                "trustScore": 60,  # Higher base for OAuth users
+                "completionScore": 20,  # Photo + email verified
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow()
+            }
+            
+            await get_db().profiles.insert_one(profile_doc)
+        
+        # Generate JWT access token
+        access_token = create_access_token({
+            "sub": user_id,
+            "email": email,
+            "verified": True
+        })
+        
+        # Generate refresh token
+        refresh_token = generate_refresh_token()
+        
+        # Store refresh token
+        await get_db().users.update_one(
+            {"_id": existing_user["_id"] if existing_user else result.inserted_id},
+            {
+                "$push": {
+                    "refreshTokens": {
+                        "token": refresh_token,
+                        "createdAt": datetime.utcnow(),
+                        "expiresAt": datetime.utcnow() + timedelta(days=14),
+                        "userAgent": "OAuth",
+                        "ipAddress": "OAuth"
+                    }
+                }
+            }
+        )
+        
+        # Set refresh token cookie and redirect
+        response_redirect = RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/auth/callback?token={access_token}&provider=facebook"
+        )
+        response_redirect.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+            path="/auth"
+        )
+        
+        return response_redirect
+        
+    except HTTPException as e:
+        logger.error(f"Facebook OAuth HTTPException: {e.detail}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=oauth_failed"
+        return RedirectResponse(url=error_url)
+    except Exception as e:
+        logger.error(f"Facebook OAuth unexpected error: {str(e)}")
+        error_url = f"{settings.FRONTEND_URL}/login?error=server_error"
+        return RedirectResponse(url=error_url)
 
 
 @router.get("/oauth/github/callback")
@@ -995,12 +1371,12 @@ async def github_oauth_callback(code: str, response: Response, state: Optional[s
     }
     
     # Check if user exists
-    existing_user = await db.users().find_one({"email": mock_user["email"]})
+    existing_user = await get_db().users.find_one({"email": mock_user["email"]})
     
     if existing_user:
         user_id = str(existing_user["_id"])
     else:
-        result = await db.users().insert_one(mock_user)
+        result = await get_db().users.insert_one(mock_user)
         user_id = str(result.inserted_id)
     
     # Generate token
@@ -1014,3 +1390,189 @@ async def github_oauth_callback(code: str, response: Response, state: Optional[s
     return RedirectResponse(
         url=f"{frontend_url}/home?token={access_token}&provider=github"
     )
+
+
+# ===== PASSWORD RESET ENDPOINTS =====
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyResetOTPRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    token: str
+    newPassword: str = Field(..., min_length=8, max_length=100)
+    
+    @field_validator('newPassword')
+    @classmethod
+    def validate_password(cls, v):
+        if not any(char.isdigit() for char in v):
+            raise ValueError('Password must contain at least one digit')
+        if not any(char.isupper() for char in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(char.islower() for char in v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        return v
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    """
+    Request password reset - sends OTP to email
+    """
+    try:
+        email = data.email.lower().strip()
+        
+        # Find user by email
+        user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"}
+        })
+        
+        # IMPORTANT: Don't reveal if user exists (security best practice)
+        # Always return success to prevent email enumeration attacks
+        
+        if user:
+            # Generate 6-digit OTP
+            reset_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+            reset_token = secrets.token_urlsafe(32)
+            
+            # Store reset code with 10-minute expiry
+            await get_db().users.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "passwordResetCode": reset_code,
+                        "passwordResetToken": reset_token,
+                        "passwordResetExpires": datetime.utcnow() + timedelta(minutes=10)
+                    }
+                }
+            )
+            
+            # Send email with OTP
+            try:
+                await send_verification_email(
+                    to_email=email,
+                    user_name=user.get('name', 'User'),
+                    verification_code=reset_code,
+                    subject="Password Reset Code",
+                    template_type="reset"  # Use different template for reset
+                )
+                logger.info(f"Password reset code sent to {email}: {reset_code}")
+            except Exception as e:
+                logger.warning(f"Failed to send reset email: {e}")
+                # Continue anyway - code is stored in database
+        
+        # Always return success (don't reveal if email exists)
+        return {
+            "message": "If an account with that email exists, a reset code has been sent.",
+            "success": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Forgot password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process password reset request"
+        )
+
+
+@router.post("/verify-reset-otp")
+async def verify_reset_otp(data: VerifyResetOTPRequest):
+    """
+    Verify password reset OTP code
+    Returns token for password reset
+    """
+    try:
+        email = data.email.lower().strip()
+        code = data.code.strip()
+        
+        # Find user with matching email, code, and valid expiry
+        user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"},
+            "passwordResetCode": code,
+            "passwordResetExpires": {"$gt": datetime.utcnow()}
+        })
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset code"
+            )
+        
+        # Return the reset token (needed for final password reset)
+        return {
+            "message": "Code verified successfully",
+            "token": user["passwordResetToken"],
+            "success": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify reset OTP error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify reset code"
+        )
+
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    """
+    Reset password with verified token
+    """
+    try:
+        email = data.email.lower().strip()
+        
+        # Find user with matching email, token, and valid expiry
+        user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"},
+            "passwordResetToken": data.token,
+            "passwordResetExpires": {"$gt": datetime.utcnow()}
+        })
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token"
+            )
+        
+        # Hash new password
+        hashed_password = hash_password(data.newPassword)
+        
+        # Update password and clear reset tokens
+        await get_db().users.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "password": hashed_password,
+                    "passwordChangedAt": datetime.utcnow()
+                },
+                "$unset": {
+                    "passwordResetCode": "",
+                    "passwordResetToken": "",
+                    "passwordResetExpires": ""
+                }
+            }
+        )
+        
+        logger.info(f"Password reset successful for {email}")
+        
+        return {
+            "message": "Password reset successful",
+            "success": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
+        )

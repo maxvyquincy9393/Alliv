@@ -36,7 +36,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
         try:
             # Extract token from auth
             if not auth or 'token' not in auth:
-                logger.warning(f"❌ Connection rejected: No token provided")
+                logger.warning(f"[ERROR] Connection rejected: No token provided")
                 await sio.disconnect(sid)
                 return False
             
@@ -45,13 +45,13 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             # Verify JWT token
             payload = decode_token(token)
             if not payload:
-                logger.warning(f"❌ Connection rejected: Invalid token")
+                logger.warning(f"[ERROR] Connection rejected: Invalid token")
                 await sio.disconnect(sid)
                 return False
             
             user_id = payload.get('sub')
             if not user_id:
-                logger.warning(f"❌ Connection rejected: No user_id in token")
+                logger.warning(f"[ERROR] Connection rejected: No user_id in token")
                 await sio.disconnect(sid)
                 return False
             
@@ -59,11 +59,11 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             try:
                 user = await db.users.find_one({"_id": ObjectId(user_id)})
                 if not user:
-                    logger.warning(f"❌ Connection rejected: User not found {user_id}")
+                    logger.warning(f"[ERROR] Connection rejected: User not found {user_id}")
                     await sio.disconnect(sid)
                     return False
             except Exception as e:
-                logger.error(f"❌ Database error in connect: {str(e)}")
+                logger.error(f"[ERROR] Database error in connect: {str(e)}")
                 await sio.disconnect(sid)
                 return False
             
@@ -77,7 +77,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 'timestamp': datetime.utcnow().isoformat()
             }, room=sid)
             
-            logger.info(f"✅ User connected: {user.get('name')} (ID: {user_id}, SID: {sid})")
+            logger.info(f"[OK] User connected: {user.get('name')} (ID: {user_id}, SID: {sid})")
             
             # Broadcast online status to all matches
             await broadcast_online_status(sio, user_id, online=True)
@@ -85,7 +85,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error in connect handler: {str(e)}")
+            logger.error(f"[ERROR] Error in connect handler: {str(e)}")
             await sio.disconnect(sid)
             return False
     
@@ -113,13 +113,13 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 if sid in user_match_rooms:
                     del user_match_rooms[sid]
                 
-                logger.info(f"✅ User disconnected: ID {user_id}, SID {sid}")
+                logger.info(f"[OK] User disconnected: ID {user_id}, SID {sid}")
                 
                 # Broadcast offline status
                 await broadcast_online_status(sio, user_id, online=False)
             
         except Exception as e:
-            logger.error(f"❌ Error in disconnect handler: {str(e)}")
+            logger.error(f"[ERROR] Error in disconnect handler: {str(e)}")
     
     
     @sio.event
@@ -158,7 +158,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                     return
                 
             except Exception as e:
-                logger.error(f"❌ Database error in join_match: {str(e)}")
+                logger.error(f"[ERROR] Database error in join_match: {str(e)}")
                 await sio.emit('error', {'message': 'Failed to join match'}, room=sid)
                 return
             
@@ -166,7 +166,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             await sio.enter_room(sid, match_id)
             user_match_rooms[sid] = match_id
             
-            logger.info(f"✅ User {user_id} joined match {match_id}")
+            logger.info(f"[OK] User {user_id} joined match {match_id}")
             
             # Emit success to client
             await sio.emit('joined_match', {
@@ -184,7 +184,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 }, room=other_sid)
             
         except Exception as e:
-            logger.error(f"❌ Error in join_match handler: {str(e)}")
+            logger.error(f"[ERROR] Error in join_match handler: {str(e)}")
             await sio.emit('error', {'message': 'Failed to join match'}, room=sid)
     
     
@@ -236,7 +236,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             result = await db.messages.insert_one(message_doc)
             message_id = str(result.inserted_id)
             
-            logger.info(f"✅ Message sent: {user_id} -> {match_id}")
+            logger.info(f"[OK] Message sent: {user_id} -> {match_id}")
             
             # Prepare broadcast message
             broadcast_data = {
@@ -261,7 +261,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 }, room=match_id, skip_sid=sid)
             
         except Exception as e:
-            logger.error(f"❌ Error in send_message handler: {str(e)}")
+            logger.error(f"[ERROR] Error in send_message handler: {str(e)}")
             await sio.emit('error', {'message': 'Failed to send message'}, room=sid)
     
     
@@ -304,7 +304,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 }, room=match_id, skip_sid=sid)
             
         except Exception as e:
-            logger.error(f"❌ Error in typing handler: {str(e)}")
+            logger.error(f"[ERROR] Error in typing handler: {str(e)}")
     
     
     @sio.event
@@ -353,10 +353,10 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                     'read_at': datetime.utcnow().isoformat()
                 }, room=match_id, skip_sid=sid)
                 
-                logger.info(f"✅ Message read: {message_id} by {user_id}")
+                logger.info(f"[OK] Message read: {message_id} by {user_id}")
             
         except Exception as e:
-            logger.error(f"❌ Error in read_message handler: {str(e)}")
+            logger.error(f"[ERROR] Error in read_message handler: {str(e)}")
 
 
 async def broadcast_online_status(sio: socketio.AsyncServer, user_id: str, online: bool):
@@ -384,4 +384,4 @@ async def broadcast_online_status(sio: socketio.AsyncServer, user_id: str, onlin
             }, room=match_id)
         
     except Exception as e:
-        logger.error(f"❌ Error broadcasting online status: {str(e)}")
+        logger.error(f"[ERROR] Error broadcasting online status: {str(e)}")

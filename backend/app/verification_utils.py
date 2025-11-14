@@ -108,7 +108,7 @@ def create_verification_record(user_id: str, email: str) -> dict:
         "createdAt": now
     }
     
-    logger.info(f"✅ Verification created for user {user_id} (expires in 10m)")
+    logger.info(f"[OK] Verification created for user {user_id} (expires in 10m)")
     
     # Return record + plaintext code (for email sending only)
     return {

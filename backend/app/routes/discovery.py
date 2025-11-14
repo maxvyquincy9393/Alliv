@@ -9,7 +9,7 @@ from pymongo.errors import PyMongoError
 import logging
 import math
 
-from .. import db
+from ..db import get_db
 from ..auth import get_current_user
 
 # Setup logging
@@ -95,12 +95,12 @@ async def discover_online(
     Returns users with compatibility scores based on skills/interests
     """
     try:
-        # ✅ Get current user's profile
-        user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        # [OK] Get current user's profile
+        user_profile = await get_db().profiles.find_one({"userId": current_user["_id"]})
         
-        # ✅ Handle missing profile properly
+        # [OK] Handle missing profile properly
         if not user_profile:
-            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            logger.warning(f"[WARN] User {current_user['_id']} authenticated but no profile found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found. Please complete your profile setup first."
@@ -116,10 +116,10 @@ async def discover_online(
             query["field"] = field
         
         # Get all matching profiles
-        profiles_cursor = db.profiles().find(query).limit(limit * 3)  # Get more for scoring
+        profiles_cursor = get_db().profiles.find(query).limit(limit * 3)  # Get more for scoring
         profiles = await profiles_cursor.to_list(length=limit * 3)
         
-        # ✅ Handle empty results gracefully
+        # [OK] Handle empty results gracefully
         if not profiles:
             return {
                 "users": [],
@@ -135,7 +135,7 @@ async def discover_online(
                 compatibility = calculate_compatibility(user_profile, profile)
                 
                 # Get user info
-                user = await db.users().find_one({"_id": profile["userId"]})
+                user = await get_db().users.find_one({"_id": profile["userId"]})
                 if user:
                     scored_profiles.append({
                         "id": str(profile["userId"]),
@@ -154,7 +154,7 @@ async def discover_online(
                         "verified": user.get("verified", False),
                     })
             except Exception as e:
-                logger.error(f"❌ Error processing profile {profile.get('userId')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing profile {profile.get('userId')}: {str(e)}")
                 continue  # Skip this profile, continue with others
         
         # Sort by compatibility score (highest first)
@@ -169,13 +169,13 @@ async def discover_online(
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except PyMongoError as e:
-        logger.error(f"❌ Database error in discover_online: {str(e)}")
+        logger.error(f"[ERROR] Database error in discover_online: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in discover_online: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in discover_online: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve online users"
@@ -196,11 +196,11 @@ async def discover_nearby(
     Returns users sorted by distance and compatibility
     """
     try:
-        # ✅ Get current user's profile
-        user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        # [OK] Get current user's profile
+        user_profile = await get_db().profiles.find_one({"userId": current_user["_id"]})
         
         if not user_profile:
-            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            logger.warning(f"[WARN] User {current_user['_id']} authenticated but no profile found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found. Please complete your profile setup first."
@@ -225,10 +225,10 @@ async def discover_nearby(
             query["field"] = field
         
         # Get nearby profiles
-        profiles_cursor = db.profiles().find(query).limit(limit * 2)
+        profiles_cursor = get_db().profiles.find(query).limit(limit * 2)
         profiles = await profiles_cursor.to_list(length=limit * 2)
         
-        # ✅ Handle empty results
+        # [OK] Handle empty results
         if not profiles:
             return {
                 "users": [],
@@ -253,7 +253,7 @@ async def discover_nearby(
                         compatibility = calculate_compatibility(user_profile, profile, distance)
                         
                         # Get user info
-                        user = await db.users().find_one({"_id": profile["userId"]})
+                        user = await get_db().users.find_one({"_id": profile["userId"]})
                         if user:
                             nearby_users.append({
                                 "id": str(profile["userId"]),
@@ -275,7 +275,7 @@ async def discover_nearby(
                                 "verified": user.get("verified", False),
                             })
             except Exception as e:
-                logger.error(f"❌ Error processing nearby profile {profile.get('userId')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing nearby profile {profile.get('userId')}: {str(e)}")
                 continue
         
         # Sort by compatibility (primary) and distance (secondary)
@@ -291,13 +291,13 @@ async def discover_nearby(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in discover_nearby: {str(e)}")
+        logger.error(f"[ERROR] Database error in discover_nearby: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in discover_nearby: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in discover_nearby: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve nearby users"
@@ -314,10 +314,10 @@ async def daily_suggestions(
     """
     try:
         # Get user profile
-        user_profile = await db.profiles().find_one({"userId": current_user["_id"]})
+        user_profile = await get_db().profiles.find_one({"userId": current_user["_id"]})
         
         if not user_profile:
-            logger.warning(f"⚠️ User {current_user['_id']} authenticated but no profile found")
+            logger.warning(f"[WARN] User {current_user['_id']} authenticated but no profile found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Profile not found. Please complete your profile setup first."
@@ -329,10 +329,10 @@ async def daily_suggestions(
             "visibility": {"$ne": "private"}
         }
         
-        profiles_cursor = db.profiles().find(query).limit(50)
+        profiles_cursor = get_db().profiles.find(query).limit(50)
         profiles = await profiles_cursor.to_list(length=50)
         
-        # ✅ Handle empty results
+        # [OK] Handle empty results
         if not profiles:
             return {
                 "suggestions": [],
@@ -347,7 +347,7 @@ async def daily_suggestions(
                 compatibility = calculate_compatibility(user_profile, profile)
                 
                 if compatibility >= 70:  # Only high matches
-                    user = await db.users().find_one({"_id": profile["userId"]})
+                    user = await get_db().users.find_one({"_id": profile["userId"]})
                     if user:
                         suggestions.append({
                             "id": str(profile["userId"]),
@@ -358,7 +358,7 @@ async def daily_suggestions(
                             "reason": f"High match in {profile.get('field', 'collaboration')}"
                         })
             except Exception as e:
-                logger.error(f"❌ Error processing suggestion profile {profile.get('userId')}: {str(e)}")
+                logger.error(f"[ERROR] Error processing suggestion profile {profile.get('userId')}: {str(e)}")
                 continue
         
         # Return top 3
@@ -372,13 +372,13 @@ async def daily_suggestions(
     except HTTPException:
         raise
     except PyMongoError as e:
-        logger.error(f"❌ Database error in daily_suggestions: {str(e)}")
+        logger.error(f"[ERROR] Database error in daily_suggestions: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in daily_suggestions: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in daily_suggestions: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate suggestions"

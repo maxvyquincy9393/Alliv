@@ -13,7 +13,7 @@ from collections import defaultdict
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# ✅ Simple in-memory rate limiting (for production, use Redis)
+# [OK] Simple in-memory rate limiting (for production, use Redis)
 rate_limit_store = defaultdict(list)
 RATE_LIMIT_MESSAGES = 30  # messages per minute
 RATE_LIMIT_WINDOW = 60  # seconds
@@ -31,7 +31,7 @@ async def get_messages(
     Get message history for a match with comprehensive error handling
     """
     try:
-        # ✅ Validate match_id format
+        # [OK] Validate match_id format
         try:
             match_oid = ObjectId(match_id)
         except Exception:
@@ -40,11 +40,11 @@ async def get_messages(
                 detail="Invalid match ID format"
             )
         
-        # ✅ Verify user is part of this match (with error handling)
+        # [OK] Verify user is part of this match (with error handling)
         try:
             is_authorized = await verify_user_in_match(match_id, current_user["_id"])
         except Exception as e:
-            logger.error(f"❌ Error verifying match authorization: {str(e)}")
+            logger.error(f"[ERROR] Error verifying match authorization: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to verify match authorization"
@@ -56,20 +56,20 @@ async def get_messages(
                 detail="Not authorized to view this match"
             )
         
-        # ✅ Get messages with error handling
+        # [OK] Get messages with error handling
         messages = await get_match_messages(match_id, limit=limit)
         return messages
         
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except PyMongoError as e:
-        logger.error(f"❌ Database error in get_messages: {str(e)}")
+        logger.error(f"[ERROR] Database error in get_messages: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in get_messages: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in get_messages: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve messages"
@@ -78,7 +78,7 @@ async def get_messages(
 
 def check_rate_limit(user_id: str) -> bool:
     """
-    ✅ Check if user has exceeded rate limit (30 messages per minute)
+    [OK] Check if user has exceeded rate limit (30 messages per minute)
     Returns True if allowed, False if rate limit exceeded
     """
     now = datetime.utcnow()
@@ -109,7 +109,7 @@ async def send_message(
     Send a message with rate limiting, validation, and error handling
     """
     try:
-        # ✅ Validate match_id format
+        # [OK] Validate match_id format
         try:
             match_oid = ObjectId(match_id)
         except Exception:
@@ -118,7 +118,7 @@ async def send_message(
                 detail="Invalid match ID format"
             )
         
-        # ✅ Validate message content
+        # [OK] Validate message content
         content = message.content.strip()
         if not content:
             raise HTTPException(
@@ -132,18 +132,18 @@ async def send_message(
                 detail="Message content exceeds maximum length (5000 characters)"
             )
         
-        # ✅ Rate limiting check
+        # [OK] Rate limiting check
         if not check_rate_limit(current_user["_id"]):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Rate limit exceeded. Maximum {RATE_LIMIT_MESSAGES} messages per minute."
             )
         
-        # ✅ Verify user is part of this match
+        # [OK] Verify user is part of this match
         try:
             is_authorized = await verify_user_in_match(match_id, current_user["_id"])
         except Exception as e:
-            logger.error(f"❌ Error verifying match authorization: {str(e)}")
+            logger.error(f"[ERROR] Error verifying match authorization: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to verify match authorization"
@@ -155,7 +155,7 @@ async def send_message(
                 detail="Not authorized to send messages in this match"
             )
         
-        # ✅ Create message
+        # [OK] Create message
         message_doc = await create_message(
             match_id=match_id,
             sender_id=current_user["_id"],
@@ -167,13 +167,13 @@ async def send_message(
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except PyMongoError as e:
-        logger.error(f"❌ Database error in send_message: {str(e)}")
+        logger.error(f"[ERROR] Database error in send_message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database temporarily unavailable"
         )
     except Exception as e:
-        logger.error(f"❌ Unexpected error in send_message: {str(e)}")
+        logger.error(f"[ERROR] Unexpected error in send_message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send message"

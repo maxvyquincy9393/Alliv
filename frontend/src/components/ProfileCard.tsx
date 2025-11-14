@@ -38,7 +38,7 @@ export const ProfileCard = ({ user }: ProfileCardProps) => {
                     clipRule="evenodd"
                   />
                 </svg>
-                {user.location}
+                {typeof user.location === 'string' ? user.location : user.location?.city || 'Unknown location'}
               </p>
             )}
           </div>

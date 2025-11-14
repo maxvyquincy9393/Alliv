@@ -16,7 +16,7 @@ from typing import Optional
 import logging
 
 from ..config import settings
-from .. import db
+from ..db import get_db
 from ..models_verification import (
     VerifyRequestInput,
     VerifyConfirmInput,
@@ -56,7 +56,7 @@ async def request_verification(request: Request, data: VerifyRequestInput):
         email = data.email.lower().strip()
         
         # Find user (case-insensitive)
-        user = await db.users().find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
+        user = await get_db().users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
         
         # SECURITY: Don't leak if user exists - always return 200
         if not user:
@@ -69,7 +69,7 @@ async def request_verification(request: Request, data: VerifyRequestInput):
         user_id = str(user["_id"])
         
         # Check for active verification
-        active_verification = await db.verifications().find_one({
+        active_verification = await get_db().verifications.find_one({
             "userId": user_id,
             "consumed": False,
             "expiresAt": {"$gt": datetime.utcnow()}
@@ -91,7 +91,7 @@ async def request_verification(request: Request, data: VerifyRequestInput):
         token = verification_data["token"]
         
         # Save to database
-        await db.verifications().insert_one(record)
+        await get_db().verifications.insert_one(record)
         
         # Create magic link
         magic_link = f"{settings.OAUTH_REDIRECT_BASE.replace('/auth/oauth', '')}/verify-email?token={token}"
@@ -107,7 +107,7 @@ async def request_verification(request: Request, data: VerifyRequestInput):
         if not email_sent:
             logger.warning(f"Failed to send verification email to {mask_email(email)}")
         
-        logger.info(f"📧 Verification sent to {mask_email(email)} (expires in 10m)")
+        logger.info(f"[EMAIL] Verification sent to {mask_email(email)} (expires in 10m)")
         
         # SECURITY: Generic response
         return VerifyResponse(
@@ -142,7 +142,7 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
         code = data.code.strip()
         
         # Find user
-        user = await db.users().find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
+        user = await get_db().users.find_one({"email": {"$regex": f"^{email}$", "$options": "i"}})
         
         # SECURITY: Generic error (don't reveal if user exists)
         if not user:
@@ -154,7 +154,7 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
         user_id = str(user["_id"])
         
         # Find active verification
-        verification = await db.verifications().find_one({
+        verification = await get_db().verifications.find_one({
             "userId": user_id,
             "consumed": False,
             "expiresAt": {"$gt": datetime.utcnow()}
@@ -176,7 +176,7 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
             )
         
         # Increment attempts
-        await db.verifications().update_one(
+        await get_db().verifications.update_one(
             {"_id": verification["_id"]},
             {"$inc": {"attempts": 1}}
         )
@@ -191,18 +191,18 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
             )
         
         # SUCCESS! Mark as verified
-        await db.verifications().update_one(
+        await get_db().verifications.update_one(
             {"_id": verification["_id"]},
             {"$set": {"consumed": True}}
         )
         
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$set": {"emailVerifiedAt": datetime.utcnow()}}
         )
         
         # Cleanup all active verifications for this user
-        await db.verifications().delete_many({
+        await get_db().verifications.delete_many({
             "userId": user_id,
             "consumed": False
         })
@@ -217,7 +217,7 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
         refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$push": {"refreshTokens": {
                 "token": refresh_token,
@@ -225,7 +225,7 @@ async def confirm_verification(request: Request, data: VerifyConfirmInput):
             }}}
         )
         
-        logger.info(f"✅ Email verified for {mask_email(email)}")
+        logger.info(f"[OK] Email verified for {mask_email(email)}")
         
         return VerifyConfirmResponse(
             ok=True,
@@ -256,7 +256,7 @@ async def verify_via_magic_link(token: str):
     """
     try:
         # Find verification by token
-        verification = await db.verifications().find_one({
+        verification = await get_db().verifications.find_one({
             "token": token,
             "consumed": False,
             "expiresAt": {"$gt": datetime.utcnow()}
@@ -272,7 +272,7 @@ async def verify_via_magic_link(token: str):
             )
         
         # Get user
-        user = await db.users().find_one({"_id": verification["userId"]})
+        user = await get_db().users.find_one({"_id": verification["userId"]})
         if not user:
             logger.error(f"User not found for verification: {verification['userId']}")
             return RedirectResponse(
@@ -281,24 +281,24 @@ async def verify_via_magic_link(token: str):
             )
         
         # Mark as consumed
-        await db.verifications().update_one(
+        await get_db().verifications.update_one(
             {"_id": verification["_id"]},
             {"$set": {"consumed": True}}
         )
         
         # Update user
-        await db.users().update_one(
+        await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$set": {"emailVerifiedAt": datetime.utcnow()}}
         )
         
         # Cleanup
-        await db.verifications().delete_many({
+        await get_db().verifications.delete_many({
             "userId": str(user["_id"]),
             "consumed": False
         })
         
-        logger.info(f"✅ Email verified via magic link for {mask_email(user['email'])}")
+        logger.info(f"[OK] Email verified via magic link for {mask_email(user['email'])}")
         
         # Redirect to frontend with success + masked email
         return RedirectResponse(

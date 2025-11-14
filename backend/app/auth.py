@@ -79,25 +79,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
-        print(f"🔍 DEBUG - Token decoded successfully, user_id: {user_id}")
+        print(f"[SEARCH] DEBUG - Token decoded successfully, user_id: {user_id}")
         if user_id is None:
-            print("❌ DEBUG - user_id is None in token payload")
+            print("[ERROR] DEBUG - user_id is None in token payload")
             raise credentials_exception
     except JWTError as e:
-        print(f"❌ DEBUG - JWT decode failed: {str(e)}")
+        print(f"[ERROR] DEBUG - JWT decode failed: {str(e)}")
         raise credentials_exception
     
     # Convert user_id string to ObjectId for MongoDB query
     try:
         user_object_id = ObjectId(user_id)
     except Exception as e:
-        print(f"❌ DEBUG - Invalid ObjectId format: {user_id}")
+        print(f"[ERROR] DEBUG - Invalid ObjectId format: {user_id}")
         raise credentials_exception
     
     user = await users().find_one({"_id": user_object_id})
-    print(f"🔍 DEBUG - Database lookup for user_id {user_id}: {'Found' if user else 'Not found'}")
+    print(f"[SEARCH] DEBUG - Database lookup for user_id {user_id}: {'Found' if user else 'Not found'}")
     if user is None:
-        print(f"❌ DEBUG - User {user_id} not found in database")
+        print(f"[ERROR] DEBUG - User {user_id} not found in database")
         raise credentials_exception
     
     # Update last_active
