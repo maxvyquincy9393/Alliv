@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRegistrationStore } from '../../store/registration';
 import { GlassButton } from '../../components/GlassButton';
-import { api } from '../../lib/api';
+import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 export const StepSummary = () => {
@@ -56,21 +56,22 @@ export const StepSummary = () => {
     }
 
     setCreating(true);
-    
+
     try {
       console.log('🚀 Starting registration with:', { name: data.name, email: data.email });
-      
+
       // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout - please try again')), 30000)
       );
-      
+
       // Register with API (with 30s timeout)
       const response = await Promise.race([
-        api.register({
+        api.auth.register({
           name: data.name!,
           email: data.email,
           password: password,
+          birthdate: data.birthday || new Date().toISOString(), // Fallback to current date if missing to satisfy type, though validation should catch it
         }),
         timeoutPromise
       ]) as any;
@@ -84,24 +85,24 @@ export const StepSummary = () => {
       // Navigate to verify email page or home
       if (response && response.requiresEmailVerification) {
         console.log('📧 Email verification required, navigating to verify-email page');
-        
+
         // Reset registration state BEFORE navigate
         reset();
-        
+
         // Navigate immediately
-        navigate('/verify-email', { 
-          state: { 
+        navigate('/verify-email', {
+          state: {
             email: data.email,
-            verificationToken: response.verificationToken 
+            verificationToken: response.verificationToken
           },
           replace: true // Replace current history entry
         });
       } else {
         console.log('✅ No verification needed, going to home');
-        
+
         // Reset registration state BEFORE navigate
         reset();
-        
+
         navigate('/home', { replace: true });
       }
     } catch (error: any) {
@@ -111,14 +112,14 @@ export const StepSummary = () => {
         stack: error.stack,
         fullError: error
       });
-      
+
       // Extract detailed error message
       let errorMessage = 'Registration failed. Please try again.';
-      
+
       if (error.message) {
         errorMessage = error.message;
       }
-      
+
       // Handle validation errors from backend
       if (error.message && error.message.includes('uppercase')) {
         errorMessage = 'Password must contain at least one uppercase letter';
@@ -129,7 +130,7 @@ export const StepSummary = () => {
       } else if (error.message && error.message.includes('already registered')) {
         errorMessage = 'This email is already registered. Try logging in instead.';
       }
-      
+
       toast.error(errorMessage, { duration: 5000 });
     } finally {
       console.log('🏁 Registration process completed, setting creating to false');
@@ -287,9 +288,8 @@ export const StepSummary = () => {
         {[0, 1, 2, 3, 4].map((step) => (
           <div
             key={step}
-            className={`h-1 rounded-full transition-all ${
-              step === 4 ? 'w-8 bg-accent-blue' : 'w-1 bg-accent-blue/50'
-            }`}
+            className={`h-1 rounded-full transition-all ${step === 4 ? 'w-8 bg-accent-blue' : 'w-1 bg-accent-blue/50'
+              }`}
           />
         ))}
       </div>

@@ -69,7 +69,7 @@ export const SwipeCard = ({ user, onSwipe, style, swipesRemaining, totalSwipes }
       dragElastic={isMobile ? 0.2 : 0.15}
       dragMomentum={false}
     >
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#0b0b0f]/85 shadow-[0_40px_120px_rgba(0,0,0,0.65)] backdrop-blur-3xl">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#0b0b0f]/90 shadow-2xl backdrop-blur-xl">
         <div className="absolute -top-4 left-1/2 z-20 -translate-x-1/2">
           <div className="rounded-full border border-white/10 bg-black/70 px-5 py-1 text-[10px] font-semibold uppercase tracking-[0.45em] text-white/60">
             COLLAB DOSSIER
@@ -127,9 +127,8 @@ export const SwipeCard = ({ user, onSwipe, style, swipesRemaining, totalSwipes }
                   key={_photo}
                   type="button"
                   onClick={() => setActivePhotoIndex(index)}
-                  className={`h-2.5 rounded-full transition-all ${
-                    index === activePhotoIndex ? 'w-6 bg-white' : 'w-2 bg-white/40'
-                  }`}
+                  className={`h-2.5 rounded-full transition-all ${index === activePhotoIndex ? 'w-6 bg-white' : 'w-2 bg-white/40'
+                    }`}
                 />
               ))}
             </div>
@@ -259,9 +258,8 @@ interface InfoTileProps {
 
 const InfoTile = ({ label, value, highlight = false }: InfoTileProps) => (
   <div
-    className={`rounded-2xl border border-white/10 px-3 py-2 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.25)] ${
-      highlight ? 'bg-white/10' : 'bg-white/5'
-    }`}
+    className={`rounded-2xl border border-white/10 px-3 py-2 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05),0_4px_12px_rgba(0,0,0,0.25)] ${highlight ? 'bg-white/10' : 'bg-white/5'
+      }`}
   >
     <p className="text-[11px] uppercase tracking-[0.35em] text-white/45">{label}</p>
     <p className="text-sm font-semibold text-white">{value}</p>

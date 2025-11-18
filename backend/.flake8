@@ -1,0 +1,44 @@
+[flake8]
+# Maximum line length
+max-line-length = 120
+
+# Ignore certain error codes
+extend-ignore = 
+    E203,  # whitespace before ':'
+    E266,  # too many leading '#' for block comment
+    W503,  # line break before binary operator
+    W504,  # line break after binary operator
+    E501,  # line too long (handled by black)
+
+# Exclude certain directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .pytest_cache,
+    .mypy_cache,
+    .ruff_cache,
+    dist,
+    build,
+    *.egg-info,
+    .tox,
+    migrations
+
+# Maximum complexity
+max-complexity = 15
+
+# Per-file ignores
+per-file-ignores =
+    __init__.py:F401,F403
+    tests/*:S101,S105,S106
+    conftest.py:E402
+
+# Import order
+import-order-style = google
+application-import-names = app
+
+
+
+

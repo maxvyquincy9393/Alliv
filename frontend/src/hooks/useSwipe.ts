@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { User } from '../types/user';
 import { SwipeDirection } from '../types/match';
-import { api } from '../lib/api';
+import api from '../services/api';
 
 export const useSwipe = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -14,11 +14,21 @@ export const useSwipe = () => {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getDiscoverUsers();
-      setUsers(data);
+      // Use discoverOnline for now, or discoverNearby if location is available
+      const response = await api.discovery.discoverOnline();
+      if (response.data && Array.isArray(response.data.users)) {
+        setUsers(response.data.users);
+      } else if (Array.isArray(response.data)) {
+        // Fallback for legacy response format
+        setUsers(response.data);
+      } else {
+        console.warn('Unexpected response format:', response.data);
+        setUsers([]);
+      }
       setCurrentIndex(0);
     } catch (error) {
       console.error('Failed to load users:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -27,13 +37,21 @@ export const useSwipe = () => {
   const handleSwipe = useCallback(
     async (direction: SwipeDirection, userId: string) => {
       try {
-        const result = await api.swipeUser(userId, direction);
-        
-        if (result.match && result.user) {
+        let action: 'skip' | 'save' | 'connect' = 'skip';
+        if (direction === 'right') action = 'connect';
+        if (direction === 'up') action = 'save'; // Super like maps to save/connect? Or maybe 'connect' with a flag?
+        // For now, map right to connect, left to skip. Up (super like) -> connect?
+        // api.match.swipe expects 'skip' | 'save' | 'connect'.
+        // Let's map: left -> skip, right -> connect, up -> connect (for now)
+
+        const response = await api.match.swipe(userId, action);
+        const result = response.data;
+
+        if (result && result.match && result.user) {
           setMatchedUser(result.user);
           setShowMatchModal(true);
         }
-        
+
         setCurrentIndex((prev) => prev + 1);
         setSwipeHistory((prev) => [{ userId, direction }, ...prev].slice(0, 3));
       } catch (error) {

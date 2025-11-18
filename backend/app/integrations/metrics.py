@@ -270,3 +270,29 @@ def increment_websocket_connections():
 def decrement_websocket_connections():
     """Decrement WebSocket connections count."""
     websocket_connections.dec()
+
+
+def track_event(event_name: str, properties: dict = None):
+    """
+    Track a generic event.
+    
+    Args:
+        event_name: Name of the event
+        properties: Optional dictionary of event properties
+    """
+    # Log the event
+    logger.info(f"Event tracked: {event_name}", extra={"properties": properties})
+    
+    # Map specific events to metrics
+    if event_name == "user_registered":
+        provider = properties.get("provider", "email") if properties else "email"
+        record_user_registration(provider)
+    elif event_name == "match_created":
+        record_match_created()
+    elif event_name == "match_accepted":
+        record_match_accepted()
+    elif event_name == "message_sent":
+        record_message_sent()
+    
+    # For other events, we could add a generic counter if needed
+    # generic_events_total.labels(event=event_name).inc()

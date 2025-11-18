@@ -1,0 +1,92 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+LICENSE
+CONTRIBUTING.md
+SECURITY.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Environment
+.env
+.env.*
+env.example
+.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+frontend/test-results/
+frontend/playwright-report/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+tests/
+test/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+*_test.py
+test_*.py
+
+# Logs
+*.log
+logs/
+
+# Database
+mongo_data/
+redis_data/
+*.db
+*.sqlite
+
+# Misc
+.dockerignore
+docker-compose*.yml
+Dockerfile*
+
+
+
+

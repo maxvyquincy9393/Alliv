@@ -3,7 +3,7 @@ import logging
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional
 
-from .config import settings
+from .config_validated import settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,12 @@ async def init_db() -> AsyncIOMotorDatabase:
 
 async def close_db():
     """Close MongoDB connection"""
-    global _client
+    global _client, _db
     if _client:
         _client.close()
         logger.info("[OK] MongoDB connection closed")
+        _client = None
+        _db = None
 
 
 async def create_indices():

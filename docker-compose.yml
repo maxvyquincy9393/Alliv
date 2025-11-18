@@ -38,7 +38,7 @@ services:
   # Backend API
   api:
     build:
-      context: ./apps/backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: alliv_api
     depends_on:
@@ -49,9 +49,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./apps/backend:/app
+      - ./backend:/app
     env_file:
-      - ./apps/backend/.env
+      - ./backend/.env
     environment:
       - NODE_ENV=development
       - MONGO_URI=mongodb://mongo:27017/alliv

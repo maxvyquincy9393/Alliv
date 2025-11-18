@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "C:\Users\test\OneDrive\Desktop\COLABMATCH\backend\debug_start.py", line 5, in <module>
+    from app.main import socket_app
+  File "C:\Users\test\OneDrive\Desktop\COLABMATCH\backend\app\main.py", line 23, in <module>
+    from .routes import auth
+  File "C:\Users\test\OneDrive\Desktop\COLABMATCH\backend\app\routes\auth.py", line 937, in <module>
+    @limiter.limit("3/minute")
+     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\test\OneDrive\Desktop\COLABMATCH\backend\.venv\Lib\site-packages\slowapi\extension.py", line 713, in decorator
+    raise Exception(
+Exception: No "request" or "websocket" argument on function "<function request_verification at 0x000001F57C3118A0>"

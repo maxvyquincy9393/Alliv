@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+.cache/
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Environment
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github/
+
+# Documentation
+*.md
+docs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Misc
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+
+
+

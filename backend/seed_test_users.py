@@ -8,7 +8,7 @@ from datetime import datetime
 from bson import ObjectId
 import os
 from dotenv import load_dotenv
-import bcrypt
+from app.password_utils import hash_password
 
 load_dotenv()
 
@@ -131,7 +131,6 @@ async def seed_users():
     
     # Default password for all demo users
     default_password = "Demo123!"
-    password_hash = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     created_count = 0
     skipped_count = 0
@@ -149,7 +148,7 @@ async def seed_users():
             user_doc = {
                 "_id": ObjectId(),
                 "email": demo["email"],
-                "passwordHash": password_hash,
+                "passwordHash": hash_password(default_password),
                 "name": demo["name"],
                 "provider": "email",
                 "emailVerified": True,  # Pre-verified for demo

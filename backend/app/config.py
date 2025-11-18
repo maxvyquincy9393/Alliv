@@ -2,10 +2,37 @@ import os
 import sys
 import secrets
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+DEFAULT_JWT_ACCESS_SECRET = "dev_jwt_access_secret_012345678901234567"
+DEFAULT_JWT_REFRESH_SECRET = "dev_jwt_refresh_secret_01234567890123"
+DEFAULT_REFRESH_TOKEN_FINGERPRINT_PEPPER = "dev_refresh_fingerprint_pepper_0123456789"
+
+
+def _build_mongo_uri() -> str:
+    """Derive Mongo connection string with sensible fallbacks."""
+    mongo_uri = os.getenv("MONGO_URI") or os.getenv("MONGODB_URI")
+    db_name = (
+        os.getenv("MONGO_DB_NAME")
+        or os.getenv("DATABASE_NAME")
+        or "colabmatch"
+    )
+
+    if mongo_uri:
+        parsed = urlparse(mongo_uri)
+        # If no database specified, append the fallback db name
+        if not parsed.path or parsed.path == "/":
+            parsed = parsed._replace(path=f"/{db_name}")
+            return urlunparse(parsed)
+        return mongo_uri
+
+    host = os.getenv("MONGO_HOST", "localhost")
+    port = os.getenv("MONGO_PORT", "27017")
+    return f"mongodb://{host}:{port}/{db_name}"
 
 
 class Settings:
@@ -18,7 +45,7 @@ class Settings:
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:5173")
     
     # Database
-    MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017/alliv")
+    MONGO_URI: str = _build_mongo_uri()
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     
     # JWT & Sessions (REQUIRED - no defaults for production!)
@@ -73,10 +100,6 @@ class Settings:
     def _validate_required_vars(self):
         """Validate that required environment variables are set"""
         required_vars = []
-        
-        # Always required
-        if not os.getenv("MONGO_URI"):
-            required_vars.append("MONGO_URI")
         
         # Required in production
         if self.NODE_ENV == "production":
@@ -139,16 +162,16 @@ class Settings:
         else:
             # Development mode - generate temporary secrets if missing
             if not self.JWT_ACCESS_SECRET:
-                print("[WARN] WARNING: No JWT_ACCESS_SECRET found, generating temporary secret for development")
-                self.JWT_ACCESS_SECRET = secrets.token_urlsafe(32)
+                print("[WARN] WARNING: No JWT_ACCESS_SECRET found, using development fallback")
+                self.JWT_ACCESS_SECRET = DEFAULT_JWT_ACCESS_SECRET
             
             if not self.JWT_REFRESH_SECRET:
-                print("[WARN] WARNING: No JWT_REFRESH_SECRET found, generating temporary secret for development")
-                self.JWT_REFRESH_SECRET = secrets.token_urlsafe(32)
+                print("[WARN] WARNING: No JWT_REFRESH_SECRET found, using development fallback")
+                self.JWT_REFRESH_SECRET = DEFAULT_JWT_REFRESH_SECRET
             
             if not self.REFRESH_TOKEN_FINGERPRINT_PEPPER:
-                print("[WARN] WARNING: No REFRESH_TOKEN_FINGERPRINT_PEPPER found, generating temporary secret for development")
-                self.REFRESH_TOKEN_FINGERPRINT_PEPPER = secrets.token_urlsafe(32)
+                print("[WARN] WARNING: No REFRESH_TOKEN_FINGERPRINT_PEPPER found, using development fallback")
+                self.REFRESH_TOKEN_FINGERPRINT_PEPPER = DEFAULT_REFRESH_TOKEN_FINGERPRINT_PEPPER
             
             # Warn about weak secrets
             if "change_this" in self.JWT_ACCESS_SECRET:

@@ -9,6 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 from bson import ObjectId
 import os
+from app.password_utils import hash_password
 
 # Test configuration
 TEST_MONGODB_URI = os.getenv("TEST_MONGODB_URI", "mongodb://localhost:27017")
@@ -46,13 +47,16 @@ async def test_client(test_db):
         yield client
 
 
+TEST_PASSWORD = "password123"
+
+
 @pytest_asyncio.fixture
 async def test_user(test_db):
     """Create test user"""
     user_doc = {
         "_id": ObjectId(),
         "email": "testuser@example.com",
-        "passwordHash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzNJQjJQKG",  # "password123"
+        "passwordHash": hash_password(TEST_PASSWORD),
         "name": "Test User",
         "provider": "email",
         "emailVerified": True,
@@ -88,7 +92,7 @@ async def test_user2(test_db):
     user_doc = {
         "_id": ObjectId(),
         "email": "testuser2@example.com",
-        "passwordHash": "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYzNJQjJQKG",
+        "passwordHash": hash_password(TEST_PASSWORD),
         "name": "Test User 2",
         "provider": "email",
         "emailVerified": True,
@@ -125,7 +129,7 @@ async def test_discovery_flow(test_client, test_user, test_user2):
     # Login as test_user
     login_response = await test_client.post(
         "/auth/login",
-        json={"email": "testuser@example.com", "password": "password123"}
+        json={"email": "testuser@example.com", "password": TEST_PASSWORD}
     )
     assert login_response.status_code == 200
     token = login_response.json()["accessToken"]
@@ -158,7 +162,7 @@ async def test_swipe_match_flow(test_client, test_user, test_user2, test_db):
     # Login as test_user
     login1_response = await test_client.post(
         "/auth/login",
-        json={"email": "testuser@example.com", "password": "password123"}
+        json={"email": "testuser@example.com", "password": TEST_PASSWORD}
     )
     assert login1_response.status_code == 200
     token1 = login1_response.json()["accessToken"]
@@ -166,7 +170,7 @@ async def test_swipe_match_flow(test_client, test_user, test_user2, test_db):
     # Login as test_user2
     login2_response = await test_client.post(
         "/auth/login",
-        json={"email": "testuser2@example.com", "password": "password123"}
+        json={"email": "testuser2@example.com", "password": TEST_PASSWORD}
     )
     assert login2_response.status_code == 200
     token2 = login2_response.json()["accessToken"]

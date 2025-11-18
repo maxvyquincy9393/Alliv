@@ -28,13 +28,15 @@ export const AnimatedBackground = () => {
       constructor() {
         this.x = Math.random() * (canvas?.width || window.innerWidth);
         this.y = Math.random() * (canvas?.height || window.innerHeight);
-        this.vx = (Math.random() - 0.5) * 0.5;
-        this.vy = (Math.random() - 0.5) * 0.5;
-        this.radius = Math.random() * 2 + 0.5;
-        this.maxLife = Math.random() * 100 + 100;
+        // Slower velocity for smoother feel
+        this.vx = (Math.random() - 0.5) * 0.2; 
+        this.vy = (Math.random() - 0.5) * 0.2;
+        this.radius = Math.random() * 1.5 + 0.5;
+        this.maxLife = Math.random() * 100 + 200; // Longer life
         this.life = this.maxLife;
         
-        const colors = ['#35F5FF', '#7F6CFF', '#FF8EC7', '#FFEC3D'];
+        // Monochrome colors (white/grey)
+        const colors = ['#FFFFFF', '#F3F4F6', '#E2E8F0', '#94A3B8'];
         this.color = colors[Math.floor(Math.random() * colors.length)];
       }
 
@@ -59,11 +61,11 @@ export const AnimatedBackground = () => {
 
       draw() {
         if (!ctx) return;
-        const opacity = this.life / this.maxLife;
-        ctx.globalAlpha = opacity * 0.5;
+        const opacity = (this.life / this.maxLife) * 0.3; // Lower opacity
+        ctx.globalAlpha = opacity;
         ctx.fillStyle = this.color;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 5; // Reduced glow
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -71,9 +73,9 @@ export const AnimatedBackground = () => {
       }
     }
 
-    // Create particles
+    // Create particles (reduced count for simplicity)
     const particles: Particle[] = [];
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 60; i++) {
       particles.push(new Particle());
     }
 
@@ -85,11 +87,11 @@ export const AnimatedBackground = () => {
             Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)
           );
           
-          if (distance < 100) {
-            const opacity = (1 - distance / 100) * 0.2;
+          if (distance < 120) {
+            const opacity = (1 - distance / 120) * 0.1; // Very subtle lines
             if (ctx) {
               ctx.globalAlpha = opacity;
-              ctx.strokeStyle = '#35F5FF';
+              ctx.strokeStyle = '#FFFFFF';
               ctx.lineWidth = 0.5;
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
@@ -104,8 +106,8 @@ export const AnimatedBackground = () => {
     // Animation loop
     const animate = () => {
       if (!ctx || !canvas) return;
-      ctx.fillStyle = 'rgba(10, 15, 28, 0.05)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Clear with slight trail or full clear? Full clear for now to keep it clean.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       particles.forEach(particle => {
         particle.update();
@@ -136,59 +138,44 @@ export const AnimatedBackground = () => {
         style={{ zIndex: 1 }}
       />
       
-      {/* Animated gradient orbs */}
+      {/* Animated gradient orbs - Monochrome & Subtle */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+        <motion.div
+          className="absolute w-[800px] h-[800px] rounded-full"
+          style={{
+            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+            top: '-20%',
+            left: '-10%',
+          }}
+          animate={{
+            scale: [1, 1.1, 1],
+            opacity: [0.3, 0.5, 0.3],
+          }}
+          transition={{
+            duration: 15,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+        
         <motion.div
           className="absolute w-[600px] h-[600px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(53, 245, 255, 0.3) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
             filter: 'blur(60px)',
+            bottom: '-10%',
+            right: '-10%',
           }}
           animate={{
-            x: ['-20%', '120%', '-20%'],
-            y: ['-20%', '120%', '-20%'],
+            scale: [1, 1.2, 1],
+            opacity: [0.2, 0.4, 0.2],
           }}
           transition={{
             duration: 20,
             repeat: Infinity,
-            ease: 'linear',
-          }}
-        />
-        
-        <motion.div
-          className="absolute w-[800px] h-[800px] rounded-full"
-          style={{
-            background: 'radial-gradient(circle, rgba(127, 108, 255, 0.3) 0%, transparent 70%)',
-            filter: 'blur(80px)',
-            right: 0,
-          }}
-          animate={{
-            x: ['20%', '-120%', '20%'],
-            y: ['120%', '-20%', '120%'],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: 'linear',
-          }}
-        />
-        
-        <motion.div
-          className="absolute w-[500px] h-[500px] rounded-full"
-          style={{
-            background: 'radial-gradient(circle, rgba(255, 142, 199, 0.3) 0%, transparent 70%)',
-            filter: 'blur(70px)',
-            bottom: 0,
-            left: '50%',
-          }}
-          animate={{
-            x: ['-50%', '50%', '-50%'],
-            y: ['50%', '-50%', '50%'],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: 'linear',
+            ease: 'easeInOut',
+            delay: 2,
           }}
         />
       </div>

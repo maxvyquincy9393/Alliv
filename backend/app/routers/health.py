@@ -18,7 +18,7 @@ async def check_database_health() -> Dict[str, Any]:
     """Check MongoDB connection health"""
     try:
         from app.db import get_db
-        db = await get_db()
+        db = get_db()
         # Ping database
         await db.command('ping')
         

@@ -12,6 +12,46 @@ from .config import settings
 
 logger = logging.getLogger("alliv")
 
+DEFAULT_FRONTEND_URL = "http://localhost:3000"
+
+
+def _get_frontend_base_url() -> str:
+    """Return the configured frontend base URL with a safe fallback."""
+    base_url = getattr(settings, "FRONTEND_URL", DEFAULT_FRONTEND_URL) or DEFAULT_FRONTEND_URL
+    base_url = base_url.rstrip("/")
+    return base_url or DEFAULT_FRONTEND_URL
+
+
+def _normalize_code(code: Optional[str]) -> str:
+    """Strip whitespace from the verification/reset code."""
+    if not code:
+        return ""
+    return "".join(str(code).split())
+
+
+def _format_code_for_display(code: str) -> str:
+    """Format a code into groups of three characters for readability."""
+    if not code:
+        return ""
+    return " ".join(code[i:i + 3] for i in range(0, len(code), 3)).strip()
+
+
+def _build_action_link(provided_link: Optional[str], fallback_path: str, verification_code: str) -> str:
+    """
+    Build a safe magic link for verification/reset actions when callers don't provide one.
+    """
+    if provided_link:
+        return provided_link
+    
+    base_url = _get_frontend_base_url()
+    path = fallback_path if fallback_path.startswith("/") else f"/{fallback_path}"
+    link = f"{base_url}{path}"
+    
+    if verification_code:
+        separator = "&" if "?" in link else "?"
+        return f"{link}{separator}code={verification_code}"
+    return link
+
 
 def parse_smtp_url(smtp_url: str) -> dict:
     """
@@ -48,8 +88,15 @@ async def send_email(
         True if sent successfully, False otherwise
     """
     if not settings.SMTP_URL:
-        logger.warning("SMTP_URL not configured - email not sent")
-        return False
+        logger.warning("SMTP_URL not configured - using development fallback")
+        # Development fallback: Log email to console instead of sending
+        print("\n" + "="*50)
+        print(f"📧 MOCK EMAIL TO: {to_email}")
+        print(f"SUBJECT: {subject}")
+        print("-" * 50)
+        print(text_content or "No text content")
+        print("="*50 + "\n")
+        return True
     
     try:
         # Parse SMTP connection details
@@ -89,15 +136,25 @@ async def send_email(
         return False
 
 
-async def send_verification_email(to_email: str, verification_link: str, user_name: str, verification_code: str) -> bool:
+async def send_verification_email(
+    to_email: str,
+    user_name: str,
+    verification_code: Optional[str],
+    verification_link: Optional[str] = None,
+) -> bool:
     """
-    Send email verification email with OTP and magic link
-    Production-grade template with security best practices
+    Send email verification email with OTP and magic link.
+    When verification_code is missing we bail out early to avoid sending an
+    unusable email.
     """
-    subject = "Alliv — Verify your email"
+    normalized_code = _normalize_code(verification_code)
+    if not normalized_code:
+        logger.warning("send_verification_email called without verification_code - skipping send")
+        return False
     
-    # Format code for display: 123456 → "123 456"
-    formatted_code = f"{verification_code[:3]} {verification_code[3:]}"
+    subject = "Alliv — Verify your email"
+    formatted_code = _format_code_for_display(normalized_code)
+    action_link = _build_action_link(verification_link, "/verify-email", normalized_code)
     
     html_content = f"""
     <!DOCTYPE html>
@@ -249,7 +306,7 @@ async def send_verification_email(to_email: str, verification_link: str, user_na
                 </div>
                 
                 <div class="button-container">
-                    <a href="{verification_link}" class="button">Verify with One Tap</a>
+                    <a href="{action_link}" class="button">Verify with One Tap</a>
                 </div>
                 
                 <div class="warning">
@@ -275,7 +332,7 @@ Here's your Alliv verification code:
 {formatted_code}
 
 Or verify with one tap:
-{verification_link}
+{action_link}
 
 This code/link expires in 10 minutes. If this wasn't you, ignore this email.
 
@@ -283,4 +340,68 @@ This code/link expires in 10 minutes. If this wasn't you, ignore this email.
 © 2025 Alliv. All rights reserved.
     """
     
-    return await send_email(to_email, subject, html_content, text_content)
+    try:
+        return await send_email(to_email, subject, html_content, text_content)
+    except Exception as exc:
+        logger.error("Failed to dispatch verification email: %s", exc)
+        return False
+
+
+async def send_reset_password_email(
+    to_email: str,
+    user_name: str,
+    verification_code: Optional[str],
+    verification_link: Optional[str] = None,
+) -> bool:
+    """
+    Send password reset helper email with both code and fallback link.
+    """
+    normalized_code = _normalize_code(verification_code)
+    if not normalized_code:
+        logger.warning("send_reset_password_email called without verification_code - skipping send")
+        return False
+    
+    subject = "Password Reset Code"
+    formatted_code = _format_code_for_display(normalized_code)
+    action_link = _build_action_link(verification_link, "/reset-password", normalized_code)
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background-color: #f9fafb; padding: 24px; margin: 0;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 10px 15px rgba(0,0,0,0.05);">
+            <h2 style="margin-top: 0; color: #111827;">Reset password request</h2>
+            <p style="color: #4b5563;">
+                Hi {user_name}, we received a request to reset your Alliv password. Use the code below or click the button to continue.
+            </p>
+            <div style="border: 1px dashed #d1d5db; border-radius: 10px; padding: 24px; text-align: center; margin: 24px 0;">
+                <p style="margin: 0 0 12px 0; color: #6b7280;">Reset password code</p>
+                <p style="font-size: 32px; font-weight: 700; letter-spacing: 8px; margin: 0; color: #111827;">{formatted_code}</p>
+            </div>
+            <p style="text-align: center;">
+                <a href="{action_link}" style="display: inline-block; padding: 14px 28px; background: #000; color: #fff; border-radius: 10px; text-decoration: none; font-weight: 600;">
+                    Reset password
+                </a>
+            </p>
+            <p style="color: #9ca3af; font-size: 14px; margin-top: 24px;">
+                If you didn't request this, you can safely ignore the email. The code expires in 10 minutes.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+Hi {user_name},
+
+Reset password code: {formatted_code}
+Reset password link: {action_link}
+
+If you didn't request this, you can ignore the email. The code expires in 10 minutes.
+    """
+    
+    try:
+        return await send_email(to_email, subject, html_content, text_content)
+    except Exception as exc:
+        logger.error("Failed to dispatch reset password email: %s", exc)
+        return False

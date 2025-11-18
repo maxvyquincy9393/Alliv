@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Navbar } from './Navbar';
+import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { MobileTopBar } from './MobileTopBar';
 
@@ -35,12 +35,12 @@ export const Layout = ({
         )}
       </div>
 
-      {showNavbar && <Navbar />}
+      {showNavbar && <Sidebar />}
       {showMobileChrome && <MobileTopBar />}
 
-      <main className="relative flex-1 pt-16 md:pt-20">
+      <main className={`relative flex-1 transition-all duration-300 ${showNavbar ? 'md:pl-72' : ''}`}>
         <div
-          className={`w-full mx-auto ${padded ? 'max-w-6xl px-3 sm:px-4 lg:px-6 py-4 md:py-6' : ''}`}
+          className={`w-full mx-auto pt-20 md:pt-8 ${padded ? 'max-w-7xl px-4 sm:px-6 lg:px-8 py-6' : ''}`}
         >
           {children}
         </div>

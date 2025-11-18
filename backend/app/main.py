@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import socketio  # [OK] ENABLED for WebSocket chat
+import socketio
 
 # Import validated config instead of regular config
 from .config_validated import settings
@@ -17,26 +17,30 @@ from .logging_config import setup_logging
 from .middleware.security import SecurityHeadersMiddleware
 from .integrations.sentry import init_sentry, capture_exception
 from .integrations.metrics import init_metrics, PrometheusMiddleware
-from . import testclient_compat  # Ensure TestClient helpers are patched for tests
+from . import testclient_compat
 from .db import init_db, close_db
-from .routes import chat
-from .routes import auth
-from .routes import profile
-from .routes import discovery
-from .routes import swipe
-from .routes import uploads
-from .routes import verification
-from .routes import email_verification  # NEW: Production email verification
-from .routes import events
-from .routes import projects
-from .routes import reports  # NEW: Report system
-from .routes import analytics  # NEW: Analytics system
-from .routes import health
-from .routes import metrics as metrics_router
-from .routers import discovery_online  # NEW: Discovery Online endpoint
-from .routers import discovery_nearby  # NEW: Discovery Nearby endpoint
-from .routers import swipes  # NEW: Swipe system with match detection
-from .routers import upload  # NEW: Photo upload with Cloudinary
+
+# Consolidated Router Imports
+from .routers import (
+    health,
+    metrics as metrics_router,
+    auth,
+    email_verification,
+    profile,
+    discovery,
+    discovery_online,
+    discovery_nearby,
+    swipes,
+    upload,
+    verification,
+    events,
+    projects,
+    reports,
+    analytics,
+    chat,
+    feed,
+    connections
+)
 
 # Setup structured logging
 logger = setup_logging(
@@ -65,10 +69,7 @@ logger.info("[OK] Prometheus metrics initialized")
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
-
-# [OK] Socket.IO server - ENABLED for real-time chat
+# Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins=settings.CORS_ORIGIN.split(',') if settings.CORS_ORIGIN != "*" else "*",
@@ -81,12 +82,12 @@ sio = socketio.AsyncServer(
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
-    try:
-        await init_db()
-        logger.info("[OK] Database connected")
-    except Exception as e:
-        logger.warning(f"[WARN] Database connection failed: {e}")
-        logger.warning("[WARN] Server will run WITHOUT database (for testing)")
+    await init_db()
+    logger.info("[OK] Database connected")
+    
+    # Create indexes for performance
+    from .db_indexes import create_indexes
+    await create_indexes()
     
     yield
     
@@ -112,11 +113,9 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS middleware - MUST be added FIRST (last in list = executes first)
-# Get CORS origins from settings
+# CORS middleware
 cors_origins_str = settings.CORS_ORIGIN if hasattr(settings, 'CORS_ORIGIN') else "http://localhost:5173,http://localhost:3000"
 cors_origins = cors_origins_str.split(',') if cors_origins_str != "*" else ["*"]
-# Strip whitespace from origins
 cors_origins = [origin.strip() for origin in cors_origins] if cors_origins_str != "*" else ["*"]
 
 app.add_middleware(
@@ -126,7 +125,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight for 1 hour
+    max_age=3600,
 )
 logger.info(f"[OK] CORS middleware enabled - Origins: {cors_origins}")
 
@@ -142,35 +141,14 @@ if settings.NODE_ENV == "production":
     app.add_middleware(SecurityHeadersMiddleware)
     logger.info("[OK] Security headers enabled")
 
-# Request logging middleware - DO NOT intercept OPTIONS, let CORS middleware handle it
+# Request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all requests with timing and ensure CORS headers for POST responses"""
+    """Log all requests with timing"""
     start_time = time.time()
-    
-    # Process request - let CORS middleware and route handlers do their job
     response = await call_next(request)
-    
-    # Ensure CORS headers are present for POST/PUT/DELETE responses (backup if middleware doesn't apply)
-    origin = request.headers.get("origin")
-    if origin and request.method in ["POST", "PUT", "DELETE", "PATCH"]:
-        cors_origins_str = settings.CORS_ORIGIN if hasattr(settings, 'CORS_ORIGIN') else "http://localhost:5173,http://localhost:3000"
-        cors_origins = cors_origins_str.split(',') if cors_origins_str != "*" else ["*"]
-        
-        # Only add if not already present (CORS middleware should have added it)
-        if "Access-Control-Allow-Origin" not in response.headers:
-            if origin in cors_origins or cors_origins_str == "*":
-                response.headers["Access-Control-Allow-Origin"] = origin if cors_origins_str != "*" else "*"
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-            else:
-                # Development fallback
-                response.headers["Access-Control-Allow-Origin"] = "*"
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-    
-    # Calculate duration
     duration_ms = (time.time() - start_time) * 1000
     
-    # Log request
     logger.info(
         f"{request.method} {request.url.path}",
         extra={
@@ -182,7 +160,6 @@ async def log_requests(request: Request, call_next):
             "user_agent": request.headers.get("user-agent", "unknown")
         }
     )
-    
     return response
 
 # Global exception handler
@@ -199,18 +176,12 @@ async def global_exception_handler(request: Request, exc: Exception):
         exc_info=True
     )
     
-    # Capture exception to Sentry
     if settings.SENTRY_DSN:
         capture_exception(
             exc,
             user={"ip": request.client.host if request.client else "unknown"},
-            tags={
-                "endpoint": request.url.path,
-                "method": request.method
-            },
-            extra={
-                "request_id": getattr(request.state, "request_id", "unknown")
-            }
+            tags={"endpoint": request.url.path, "method": request.method},
+            extra={"request_id": getattr(request.state, "request_id", "unknown")}
         )
     
     return JSONResponse(
@@ -222,24 +193,26 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-app.include_router(health.router, tags=["Health"])  # Add health router first
-app.include_router(metrics_router.router, tags=["Monitoring"])  # Add metrics router
+app.include_router(health.router, tags=["Health"])
+app.include_router(metrics_router.router, tags=["Monitoring"])
+
 app.include_router(auth.router, tags=["Authentication"])
-app.include_router(email_verification.router, tags=["Email Verification"])  # NEW: Production email verification
+app.include_router(email_verification.router, tags=["Email Verification"])
 app.include_router(profile.router, tags=["Profile"])
 app.include_router(discovery.router, tags=["Discovery"])
-app.include_router(discovery_online.router, tags=["Discovery Online"])  # NEW: Discovery Online
-app.include_router(discovery_nearby.router, tags=["Discovery Nearby"])  # NEW: Discovery Nearby
-app.include_router(swipes.router, tags=["Swipes"])  # NEW: Swipe system with match detection
-app.include_router(upload.router, tags=["Upload"])  # NEW: Photo upload with Cloudinary
+app.include_router(discovery_online.router, tags=["Discovery Online"])
+app.include_router(discovery_nearby.router, tags=["Discovery Nearby"])
+app.include_router(swipes.router, tags=["Swipes"])
+app.include_router(upload.router, tags=["Upload"])
 app.include_router(verification.router, tags=["Verification"])
 app.include_router(events.router, tags=["Events"])
 app.include_router(projects.router, tags=["Projects"])
-app.include_router(reports.router, tags=["Reports"])  # NEW: Report system
-app.include_router(analytics.router, tags=["Analytics"])  # NEW: Analytics and insights
+app.include_router(reports.router, tags=["Reports"])
+app.include_router(analytics.router, tags=["Analytics"])
 app.include_router(chat.router, prefix="/chats", tags=["Chat"])
+app.include_router(feed.router)
+app.include_router(connections.router)
 
-# [OK] Socket.IO WebSocket - ENABLED for real-time chat
 # Import and register socket handlers
 from .websocket_handlers import register_socket_handlers
 register_socket_handlers(sio)
@@ -260,8 +233,7 @@ async def root():
         "health": "/health"
     }
 
-# Explicit OPTIONS handler at root level - MUST be LAST (after all routes)
-# This catches all OPTIONS requests that CORS middleware didn't handle
+# Explicit OPTIONS handler
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
     """Handle all OPTIONS preflight requests with proper CORS headers"""
@@ -274,17 +246,15 @@ async def options_handler(request: Request, full_path: str):
     
     response = Response(status_code=200)
     
-    # ALWAYS set Access-Control-Allow-Origin
     if origin:
         origin_stripped = origin.strip()
         if origin_stripped in cors_origins or cors_origins_str == "*":
             response.headers["Access-Control-Allow-Origin"] = origin_stripped if cors_origins_str != "*" else "*"
         else:
-            response.headers["Access-Control-Allow-Origin"] = "*"  # Development fallback
+            response.headers["Access-Control-Allow-Origin"] = "*"
     else:
         response.headers["Access-Control-Allow-Origin"] = "*"
     
-    # ALWAYS set required CORS headers
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
     requested_headers = request.headers.get("Access-Control-Request-Headers", "Content-Type, Authorization")

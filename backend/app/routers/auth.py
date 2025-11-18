@@ -8,7 +8,6 @@ from typing import Optional, Dict
 import secrets
 import hashlib
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
 import asyncio
 from collections import defaultdict
 import time
@@ -27,10 +26,9 @@ from ..oauth_providers import get_oauth_user_info
 from ..email_utils import send_verification_email  # NEW: Email sending
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from ..password_utils import hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
 # Rate limiting
 limiter = Limiter(key_func=get_remote_address)
 login_attempts = defaultdict(list)  # Track failed login attempts
@@ -69,20 +67,6 @@ class TokenResponse(BaseModel):
 class OAuthCallbackRequest(BaseModel):
     code: str
     provider: str
-
-
-# ===== HELPERS =====
-def hash_password(password: str) -> str:
-    """Hash password using argon2"""
-    return pwd_context.hash(password)
-
-
-def verify_password_hash(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except:
-        return False
 
 
 def check_rate_limit(email: str, ip_address: str) -> tuple[bool, str]:
@@ -517,7 +501,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             )
         
         # Verify password - CRITICAL FIX
-        password_valid = verify_password_hash(credentials.password, user["passwordHash"])
+        password_valid = verify_password(credentials.password, user["passwordHash"])
         if not password_valid:
             record_failed_attempt(email)
             raise HTTPException(
@@ -945,14 +929,64 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         )
 
 
-@router.post("/verify-email")
+class VerificationRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/verify/request")
 @limiter.limit("3/minute")
-async def verify_email(request: Request, token: str, current_user: dict = Depends(get_current_user)):
+async def request_verification(request: Request, data: VerificationRequest):
     """
-    Verify user email with token
+    Request a new verification email
     """
-    # TODO: Implement email verification logic
-    pass
+    try:
+        email = data.email.lower().strip()
+        
+        # Find user by email
+        user = await get_db().users.find_one({
+            "email": {"$regex": f"^{email}$", "$options": "i"}
+        })
+        
+        if user and not user.get("emailVerified", False):
+            # Generate new codes
+            verification_code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+            verification_token = secrets.token_urlsafe(32)
+            
+            # Update user with new codes
+            await get_db().users.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "emailVerificationCode": verification_code,
+                        "emailVerificationToken": verification_token,
+                        "emailVerificationExpires": datetime.utcnow() + timedelta(hours=24)
+                    }
+                }
+            )
+            
+            # Generate link
+            verification_link = f"{settings.OAUTH_REDIRECT_BASE.replace('/auth/oauth', '')}/verify-email?token={verification_token}"
+            
+            # Send email
+            await send_verification_email(
+                to_email=email,
+                verification_link=verification_link,
+                user_name=user.get("name", "User"),
+                verification_code=verification_code
+            )
+            
+        # Always return success
+        return {
+            "message": "If your account exists and is not verified, a new verification email has been sent.",
+            "email": email
+        }
+        
+    except Exception as e:
+        logger.error(f"Resend verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email"
+        )
 
 
 # ===== OAUTH ENDPOINTS =====
@@ -982,9 +1016,14 @@ async def github_oauth_redirect():
     Redirect to GitHub OAuth for authentication
     """
     github_auth_url = "https://github.com/login/oauth/authorize"
+    client_id = settings.OAUTH_GITHUB_ID
+    if not client_id:
+        # Fallback for development/demo if env var not set
+        client_id = "your-github-client-id"
+        
     params = {
-        "client_id": getattr(settings, 'GITHUB_CLIENT_ID', 'your-github-client-id'),
-        "redirect_uri": f"{getattr(settings, 'API_URL', 'http://localhost:8000')}/auth/oauth/github/callback",
+        "client_id": client_id,
+        "redirect_uri": f"{getattr(settings, 'API_URL', 'http://localhost:8080')}/auth/oauth/github/callback",
         "scope": "user:email",
         "state": secrets.token_urlsafe(32)
     }

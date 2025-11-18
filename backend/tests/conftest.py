@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+import unittest.mock
 from motor.motor_asyncio import AsyncIOMotorClient
 from httpx import AsyncClient, ASGITransport
 
@@ -52,9 +53,20 @@ async def client(db) -> AsyncGenerator[AsyncClient, None]:
     """
     Create test HTTP client
     """
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    # Patch init_db and create_indexes to do nothing, since we manually set up the db
+    # We need to patch where it is used (app.main)
+    async def mock_init_db():
+        pass
+        
+    async def mock_create_indexes():
+        pass
+
+    with unittest.mock.patch("app.main.init_db", side_effect=mock_init_db), \
+         unittest.mock.patch("app.main.create_indexes", side_effect=mock_create_indexes):
+        
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
 
 

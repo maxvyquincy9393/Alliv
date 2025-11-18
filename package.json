@@ -1,0 +1,16 @@
+{
+  "name": "colabmatch-root",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Root-level npm scripts for the COLABMATCH monorepo.",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "frontend:install": "npm install --prefix frontend",
+    "frontend:build": "npm run build --prefix frontend",
+    "frontend:test": "npm test --prefix frontend"
+  }
+}
+
+
+
+

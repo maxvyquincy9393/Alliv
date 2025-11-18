@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Message } from '../types/message';
-import { api } from '../lib/api';
+import api from '../services/api';
 import { socketService } from '../lib/socket';
 
 export const useChat = (matchId: string) => {
@@ -12,8 +12,10 @@ export const useChat = (matchId: string) => {
     const loadMessages = async () => {
       setLoading(true);
       try {
-        const data = await api.getMessages(matchId);
-        setMessages(data);
+        const response = await api.chat.getMessages(matchId);
+        if (response.data) {
+          setMessages(response.data);
+        }
       } catch (error) {
         console.error('Failed to load messages:', error);
       } finally {
@@ -53,11 +55,12 @@ export const useChat = (matchId: string) => {
   const sendMessage = useCallback(
     async (content: string) => {
       try {
-        const message = await api.sendMessage(matchId, content);
-        setMessages((prev) => [...prev, message]);
-        
-        // Emit via socket
-        socketService.emit('send_message', message);
+        const response = await api.chat.sendMessage(matchId, content);
+        if (response.data) {
+          setMessages((prev) => [...prev, response.data!]);
+          // Emit via socket
+          socketService.emit('send_message', response.data);
+        }
       } catch (error) {
         console.error('Failed to send message:', error);
       }

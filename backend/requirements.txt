@@ -7,7 +7,9 @@ slowapi==0.1.9
 psutil==5.9.8
 
 # Monitoring & Error Tracking
+# Monitoring & Error Tracking
 sentry-sdk[fastapi]==1.40.0
+prometheus-client==0.19.0
 
 # Database
 motor==3.3.2
@@ -31,7 +33,7 @@ python-socketio==5.11.0
 websockets==12.0
 
 # Task Queue
-redis==5.0.1
+# Task Queue
 rq==1.16.1
 
 # Email/SMS

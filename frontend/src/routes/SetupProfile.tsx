@@ -1,7 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import api, { profileAPI, ProfileUpdate } from '../services/api';
 import { Layout } from '../components/Layout';
 
 const inputClasses =
@@ -53,7 +53,6 @@ export const SetupProfile = () => {
     setLoading(true);
 
     try {
-      const age = new Date().getFullYear() - new Date(birthdate).getFullYear();
       const token = api.getToken();
       if (!token) {
         setError('Please log in again.');
@@ -61,31 +60,32 @@ export const SetupProfile = () => {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          age,
-          bio: bio.trim(),
-          skills,
-          interests,
-          goals: goals.trim(),
-          photos,
-        }),
-      });
+      const payload: ProfileUpdate = {
+        name: name.trim(),
+        age: new Date().getFullYear() - new Date(birthdate).getFullYear(),
+        bio: bio.trim(),
+        skills,
+        interests,
+        photos,
+      };
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to update profile');
+      if (goals.trim()) {
+        payload.goals = goals.trim();
+      }
+
+      const updateResponse = await profileAPI.updateMe(payload);
+      if (updateResponse.error) {
+        console.error('API Error:', updateResponse.error);
+        setError(updateResponse.error);
+        setLoading(false);
+        return;
       }
 
       navigate('/discover');
     } catch (err: any) {
-      setError(err.message || 'Failed to update profile. Please try again.');
+      console.error('Profile update failed:', err);
+      const errorMsg = typeof err === 'string' ? err : err?.message || 'Failed to update profile. Please try again.';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -95,7 +95,7 @@ export const SetupProfile = () => {
     <Layout showNavbar={false} showMobileChrome={false} padded={false}>
       <div className="min-h-screen pt-24 pb-16 px-4">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 1, y: 0 }}
           animate={{ opacity: 1, y: 0 }}
           className="max-w-5xl mx-auto space-y-10"
         >
@@ -119,7 +119,7 @@ export const SetupProfile = () => {
             </div>
           )}
 
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="panel p-6 sm:p-8">
+          <motion.div initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }} className="panel p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-8 text-white">
               <div className="grid gap-6 md:grid-cols-2">
                 <Field label="Full name *" description="Keep it personal--use your real name.">

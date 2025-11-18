@@ -177,6 +177,14 @@ def get_settings():
             
             # Maps
             MAPS_API_KEY = os.getenv("MAPS_API_KEY", "")
+            
+            # Monitoring & Error Tracking
+            SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+            SENTRY_TRACES_SAMPLE_RATE = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+
+            # CAPTCHA
+            RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")
+            RECAPTCHA_SITE_KEY = os.getenv("RECAPTCHA_SITE_KEY", "")
         
         return DevSettings()
 

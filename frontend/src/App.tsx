@@ -23,9 +23,13 @@ const Profile = lazy(() => import('./routes/Profile').then((module) => ({ defaul
 const Analytics = lazy(() => import('./routes/Analytics').then((module) => ({ default: module.Analytics })));
 
 const AppFallback = () => (
-  <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-    <div className="text-xs font-semibold uppercase tracking-[0.5em] text-white/70">
-      Loading
+  <div className="flex h-screen w-full flex-col items-center justify-center bg-[#0A0F1C] text-white overflow-hidden relative">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(53,245,255,0.1),transparent_70%)] animate-pulse" />
+    <div className="relative z-10 flex flex-col items-center gap-6">
+      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 animate-spin-slow shadow-[0_0_40px_rgba(34,211,238,0.6)]" />
+      <div className="text-xs font-bold uppercase tracking-[0.5em] text-white/70 animate-pulse">
+        Initializing
+      </div>
     </div>
   </div>
 );

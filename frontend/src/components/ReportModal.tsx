@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { X, AlertTriangle, Shield, User, MessageSquare, Camera } from 'lucide-react';
 import { GlassButton } from './GlassButton';
+import { config } from '../config';
 import axios from 'axios';
 
 interface ReportModalProps {
@@ -53,7 +54,8 @@ const reportReasons = [
 ];
 
 const CLOUDINARY_UPLOAD_PRESET = 'alivv_reports';
-const CLOUDINARY_CLOUD_NAME = 'your_cloud_name'; // TODO: Update with actual cloud name
+// Use config value or fallback to avoid crashes, but it won't work if empty.
+const CLOUDINARY_CLOUD_NAME = config.cloudinaryCloudName || 'demo'; 
 
 export const ReportModal = ({ isOpen, onClose, targetUser, context }: ReportModalProps) => {
   const [selectedReason, setSelectedReason] = useState('');

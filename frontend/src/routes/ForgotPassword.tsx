@@ -18,7 +18,13 @@ export const ForgotPassword = () => {
 
     try {
       // Request OTP for password reset
-      await authAPI.requestPasswordReset({ email });
+      const response = await authAPI.requestPasswordReset({ email });
+      if (response.error) {
+        setError(response.error);
+        setSuccess(false);
+        return;
+      }
+
       setSuccess(true);
       
       // Navigate to OTP verification page after 2 seconds

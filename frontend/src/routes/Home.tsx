@@ -8,6 +8,7 @@ import { MatchModal } from '../components/MatchModal';
 import { useSwipe } from '../hooks/useSwipe';
 import { useAuth } from '../hooks/useAuth';
 import { theme } from '../styles/theme';
+import { AIInsightsPanel } from '../components/AIInsightsPanel';
 
 export const Home = () => {
   const { isAuthenticated } = useAuth();
@@ -24,9 +25,10 @@ export const Home = () => {
     swipeHistory,
     undoLastSwipe,
   } = useSwipe();
-  
+
   const [feedback, setFeedback] = useState<{ type: 'pass' | 'like' | 'super'; id: number } | null>(null);
   const [superLikesUsed, setSuperLikesUsed] = useState(0);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   const totalDailySwipes = 50;
   const superLikeLimit = 3;
@@ -67,8 +69,34 @@ export const Home = () => {
     navigate('/chat');
   };
 
+  const handleInsightsAction = (action: string) => {
+    if (action === 'send_message') {
+      navigate('/chat');
+      setInsightsOpen(false);
+      return;
+    }
+
+    if (action === 'invite_project') {
+      navigate('/projects');
+      setInsightsOpen(false);
+    }
+  };
+
   return (
     <FullScreenLayout>
+      <div className="absolute right-6 top-6 z-20 flex gap-3">
+        <motion.button
+          type="button"
+          whileHover={{ scale: currentUser ? 1.03 : 1 }}
+          whileTap={{ scale: currentUser ? 0.97 : 1 }}
+          onClick={() => currentUser && setInsightsOpen(true)}
+          disabled={!currentUser}
+          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          AI Insights
+        </motion.button>
+      </div>
+
       <div className="relative flex flex-1 items-center justify-center px-4 py-8">
         {loading ? (
           <motion.div
@@ -79,16 +107,11 @@ export const Home = () => {
             <div className="relative">
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                className="h-20 w-20 rounded-full"
-                style={{
-                  background: `conic-gradient(from 0deg, transparent 270deg, ${theme.colors.primary.blue} 360deg)`,
-                  WebkitMask: 'radial-gradient(circle, transparent 50%, black 54%)',
-                  mask: 'radial-gradient(circle, transparent 50%, black 54%)'
-                }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                className="h-16 w-16 rounded-full border-4 border-t-transparent border-b-transparent border-l-blue-500 border-r-purple-500"
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="h-8 w-8 text-white/70" />
+                <Sparkles className="h-6 w-6 text-white/70" />
               </div>
             </div>
             <div className="text-center">
@@ -164,8 +187,8 @@ export const Home = () => {
                         background: feedback.type === 'pass'
                           ? `linear-gradient(135deg, #EF4444 0%, #DC2626 100%)`
                           : feedback.type === 'like'
-                          ? theme.gradients.button
-                          : `linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`,
+                            ? theme.gradients.button
+                            : `linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`,
                         color: feedback.type === 'super' ? '#000' : '#fff',
                         boxShadow: `0 20px 40px ${feedback.type === 'pass' ? '#EF444440' : feedback.type === 'like' ? theme.colors.primary.purple + '40' : theme.colors.primary.yellow + '40'}`
                       }}
@@ -230,6 +253,19 @@ export const Home = () => {
                 <span className="text-xs text-white/80 font-medium">{superLikesRemaining} super</span>
               </div>
             </div>
+
+            <div className="mt-6 flex justify-center">
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleSwipeAction('right')}
+                className="rounded-full bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] px-8 py-3 text-sm font-semibold text-black shadow-lg hover:shadow-xl transition-all"
+                style={{ boxShadow: `0 15px 30px ${theme.colors.primary.blue}40` }}
+              >
+                Send a quick hello
+              </motion.button>
+            </div>
           </div>
         )}
       </div>
@@ -244,6 +280,15 @@ export const Home = () => {
           />
         )}
       </AnimatePresence>
+
+      {currentUser?.id && (
+        <AIInsightsPanel
+          userId={String(currentUser.id)}
+          isVisible={insightsOpen}
+          onClose={() => setInsightsOpen(false)}
+          onAction={handleInsightsAction}
+        />
+      )}
     </FullScreenLayout>
   );
 };
@@ -258,11 +303,11 @@ interface ActionButtonProps {
   textColor?: string;
 }
 
-const ActionButton = ({ 
-  icon: Icon, 
-  onClick, 
-  disabled = false, 
-  size = 'medium', 
+const ActionButton = ({
+  icon: Icon,
+  onClick,
+  disabled = false,
+  size = 'medium',
   gradient,
   shadowColor,
   textColor = '#fff'

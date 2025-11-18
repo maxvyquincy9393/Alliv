@@ -6,6 +6,41 @@ import { config } from '../config';
 
 const API_BASE_URL = config.apiUrl;
 
+function formatErrorDetail(detail: any, fallback: string, status?: number): string {
+  if (!detail) {
+    return fallback;
+  }
+
+  if (typeof detail === 'string') {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item?.msg) return item.msg;
+        if (item?.detail) return item.detail;
+        if (item?.message) return item.message;
+        return JSON.stringify(item);
+      })
+      .filter(Boolean);
+
+    if (messages.length > 0) {
+      return messages.join(' | ');
+    }
+  }
+
+  if (typeof detail === 'object') {
+    if (detail.message) return detail.message;
+    if (detail.error) return detail.error;
+    if (detail.msg) return detail.msg;
+    return JSON.stringify(detail);
+  }
+
+  return fallback || (status ? `Request failed with status ${status}` : 'An error occurred');
+}
+
 // Types
 interface ApiResponse<T = any> {
   data?: T;
@@ -34,8 +69,9 @@ interface VerificationConfirm {
   code: string;
 }
 
-interface ProfileUpdate {
+export interface ProfileUpdate {
   name?: string;
+  age?: number;
   bio?: string;
   field?: string;
   skills?: string[];
@@ -73,7 +109,7 @@ async function fetchAPI<T = any>(
 ): Promise<ApiResponse<T>> {
   const token = localStorage.getItem('access_token');
   const csrfToken = localStorage.getItem('csrf_token');
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -95,11 +131,20 @@ async function fetchAPI<T = any>(
       credentials: 'include',
     });
 
-    const data = await response.json();
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
 
     if (!response.ok) {
       return {
-        error: data.detail || data.message || 'An error occurred',
+        error: formatErrorDetail(
+          data?.detail ?? data?.message ?? data,
+          'An error occurred',
+          response.status
+        ),
       };
     }
 
@@ -110,7 +155,7 @@ async function fetchAPI<T = any>(
       console.log('Request cancelled:', endpoint);
       return { error: 'Request cancelled' };
     }
-    
+
     console.error('API Error:', error);
     return {
       error: error instanceof Error ? error.message : 'Network error',
@@ -142,55 +187,55 @@ async function fetchWithRetry<T = any>(
 
     try {
       const response = await fetchAPI<T>(endpoint, options, signal);
-      
+
       // Success - return immediately
       if (!response.error) return response;
-      
+
       // Check if cancelled
       if (response.error === 'Request cancelled') {
         return response;
       }
-      
+
       // Check if error is retryable based on status code
       const statusMatch = response.error.match(/\b(\d{3})\b/);
       const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-      
+
       if (!retryableErrors.includes(status) || attempt === maxRetries) {
         return response; // Don't retry or max retries reached
       }
-      
+
       lastError = response.error;
-      
+
       // Wait before retry with exponential backoff
-      const delay = exponentialBackoff 
+      const delay = exponentialBackoff
         ? retryDelay * Math.pow(2, attempt)
         : retryDelay;
-      
+
       console.log(`Retrying ${endpoint} (attempt ${attempt + 1}/${maxRetries}) after ${delay}ms...`);
-      
+
       // Use Promise.race to handle abort during delay
       await Promise.race([
         new Promise(resolve => setTimeout(resolve, delay)),
         new Promise((_, reject) => {
           signal?.addEventListener('abort', () => reject(new Error('Aborted during retry delay')));
         })
-      ]).catch(() => {});
-      
+      ]).catch(() => { });
+
     } catch (error) {
       if (error instanceof Error && error.message === 'Aborted during retry delay') {
         return { error: 'Request cancelled' };
       }
-      
+
       lastError = error instanceof Error ? error.message : 'Unknown error';
-      
+
       if (attempt === maxRetries) {
         return {
           error: lastError || 'Request failed after retries'
         };
       }
-      
+
       // Wait before retry
-      const delay = exponentialBackoff 
+      const delay = exponentialBackoff
         ? retryDelay * Math.pow(2, attempt)
         : retryDelay;
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -747,6 +792,90 @@ export const safetyAPI = {
   },
 };
 
+// Feed API
+export const feedAPI = {
+  /**
+   * Get feed posts
+   */
+  getFeed: async (params?: { limit?: number; offset?: number; type?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.offset) query.append('offset', params.offset.toString());
+    if (params?.type) query.append('type', params.type);
+
+    return fetchAPI(`/feed?${query.toString()}`);
+  },
+
+  /**
+   * Create a new post
+   */
+  createPost: async (data: {
+    content: string;
+    type: string;
+    media_urls?: string[];
+    tags?: string[];
+    visibility?: string;
+    details?: any;
+  }) => {
+    return fetchAPI('/feed', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Like/Unlike a post
+   */
+  likePost: async (postId: string) => {
+    return fetchAPI(`/feed/${postId}/like`, {
+      method: 'POST',
+    });
+  },
+};
+
+// Connections API
+export const connectionsAPI = {
+  /**
+   * Get connections list
+   */
+  getConnections: async (params?: URLSearchParams) => {
+    return fetchAPI(`/connections?${params?.toString() || ''}`);
+  },
+
+  /**
+   * Get connection statistics
+   */
+  getStats: async () => {
+    return fetchAPI('/connections/stats');
+  },
+
+  /**
+   * Send connection request
+   */
+  requestConnection: async (recipientId: string, note?: string) => {
+    return fetchAPI('/connections/request', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_id: recipientId, note }),
+    });
+  },
+
+  /**
+   * Accept connection request
+   */
+  acceptConnection: async (connectionId: string) => {
+    return fetchAPI(`/connections/${connectionId}/accept`, {
+      method: 'PUT',
+    });
+  },
+};
+
+// Insights API
+export const insightsAPI = {
+  getMatchInsights: async (userId: string) => {
+    return fetchAPI(`/insights/matches/${userId}`);
+  },
+};
+
 // Health check
 export const healthAPI = {
   check: async () => {
@@ -754,7 +883,9 @@ export const healthAPI = {
   },
 };
 
-export default {
+// Export all APIs
+const api = {
+  getToken: () => localStorage.getItem('token'),
   auth: authAPI,
   profile: profileAPI,
   upload: uploadAPI,
@@ -764,5 +895,10 @@ export default {
   projects: projectsAPI,
   events: eventsAPI,
   safety: safetyAPI,
+  connections: connectionsAPI,
+  feed: feedAPI,
+  insights: insightsAPI,
   health: healthAPI,
 };
+
+export default api;
