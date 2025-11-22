@@ -14,16 +14,18 @@ import time
 import urllib.parse
 import httpx
 import logging
+import redis.asyncio as redis
 
 # Add logger at the top
 logger = logging.getLogger(__name__)
 
 from ..config import settings
 from ..db import get_db
-from ..auth import get_current_user, oauth2_scheme, create_access_token, create_refresh_token, verify_access_token, verify_refresh_token
+from ..auth import get_current_user, oauth2_scheme, create_access_token, create_refresh_token, verify_access_token, verify_refresh_token, hash_refresh_token
 from .profile import is_profile_complete
 from ..oauth_providers import get_oauth_user_info
 from ..email_utils import send_verification_email  # NEW: Email sending
+from ..services.trust import update_user_trust_score
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from ..password_utils import hash_password, verify_password
@@ -31,8 +33,8 @@ from ..password_utils import hash_password, verify_password
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Rate limiting
 limiter = Limiter(key_func=get_remote_address)
-login_attempts = defaultdict(list)  # Track failed login attempts
-lockout_users = {}  # Track locked out users
+login_attempts = defaultdict(list)  # In-memory fallback
+lockout_users = {}  # In-memory fallback
 
 # ===== MODELS =====
 class RegisterRequest(BaseModel):
@@ -69,11 +71,46 @@ class OAuthCallbackRequest(BaseModel):
     provider: str
 
 
-def check_rate_limit(email: str, ip_address: str) -> tuple[bool, str]:
-    """Check if user is rate limited or locked out"""
+async def _get_redis_client() -> Optional[redis.Redis]:
+    if not settings.REDIS_URL:
+        return None
+    try:
+        client = redis.Redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        await client.ping()
+        return client
+    except Exception as e:
+        logger.warning(f"[WARN] Redis unavailable for login rate limit: {e}")
+        return None
+
+
+async def check_rate_limit(email: str, ip_address: str) -> tuple[bool, str]:
+    """Check if user is rate limited or locked out (prefers Redis, falls back to memory)"""
     current_time = time.time()
-    
-    # Check if user is locked out
+    redis_client = await _get_redis_client()
+    lock_key = f"login:lock:{email.lower()}"
+    attempts_key = f"login:attempts:{email.lower()}"
+
+    if redis_client:
+        try:
+            if await redis_client.exists(lock_key):
+                ttl = await redis_client.ttl(lock_key)
+                remaining = ttl if ttl and ttl > 0 else 300
+                await redis_client.aclose()
+                return False, f"Account locked. Try again in {remaining} seconds"
+
+            attempts = await redis_client.get(attempts_key)
+            attempts_count = int(attempts) if attempts else 0
+            if attempts_count >= 5:
+                await redis_client.set(lock_key, "1", ex=300)
+                await redis_client.delete(attempts_key)
+                await redis_client.aclose()
+                return False, "Too many failed attempts. Account locked for 5 minutes"
+            await redis_client.aclose()
+            return True, ""
+        except Exception as e:
+            logger.warning(f"[WARN] Redis rate-limit check failed, falling back: {e}")
+
+    # Fallback in-memory
     if email in lockout_users:
         lockout_time = lockout_users[email]
         if current_time < lockout_time:
@@ -82,11 +119,8 @@ def check_rate_limit(email: str, ip_address: str) -> tuple[bool, str]:
         else:
             del lockout_users[email]
     
-    # Clean old attempts (older than 15 minutes)
     if email in login_attempts:
         login_attempts[email] = [t for t in login_attempts[email] if current_time - t < 900]
-        
-        # Check if too many attempts
         if len(login_attempts[email]) >= 5:
             lockout_users[email] = current_time + 300  # 5 minute lockout
             return False, "Too many failed attempts. Account locked for 5 minutes"
@@ -94,8 +128,26 @@ def check_rate_limit(email: str, ip_address: str) -> tuple[bool, str]:
     return True, ""
 
 
-def record_failed_attempt(email: str):
+async def record_failed_attempt(email: str):
     """Record a failed login attempt"""
+    redis_client = await _get_redis_client()
+    attempts_key = f"login:attempts:{email.lower()}"
+
+    if redis_client:
+        try:
+            # Increment attempts and set TTL 15m
+            attempts = await redis_client.incr(attempts_key)
+            if attempts == 1:
+                await redis_client.expire(attempts_key, 900)
+            # Lock after 5 attempts
+            if attempts >= 5:
+                await redis_client.set(f"login:lock:{email.lower()}", "1", ex=300)
+                await redis_client.delete(attempts_key)
+            await redis_client.aclose()
+            return
+        except Exception as e:
+            logger.warning(f"[WARN] Redis record_failed_attempt failed, fallback to memory: {e}")
+
     login_attempts[email].append(time.time())
 
 
@@ -145,7 +197,7 @@ async def register(request: Request, data: RegisterRequest):
     """
     try:
         # DEBUG: Log incoming data
-        logger.info(f"Registration attempt - Email: {data.email}, Name: {data.name}, Has password: {bool(data.password)}, Birthdate: {data.birthdate}")
+        logger.info(f"Registration attempt - Email: {data.email[:3]}***@{data.email.split('@')[1]}, Name: {data.name}, Has password: {bool(data.password)}, Birthdate: {data.birthdate}")
         
         # Normalize email
         email = data.email.lower().strip()
@@ -219,7 +271,7 @@ async def register(request: Request, data: RegisterRequest):
         )
         
         if not email_sent:
-            logger.warning(f"Failed to send verification email to {email}")
+            logger.warning(f"Failed to send verification email to {email[:3]}***@{email.split('@')[1]}")
         
         # Return verification instructions
         return {
@@ -242,7 +294,7 @@ async def register(request: Request, data: RegisterRequest):
 
 
 @router.get("/verify-email")
-async def verify_email(token: str):
+async def verify_email(token: str, response: Response):
     """
     Verify email address with token from email link
     """
@@ -288,17 +340,40 @@ async def verify_email(token: str):
         await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$push": {"refreshTokens": {
-                "token": refresh_token,
+                "token": hash_refresh_token(refresh_token),
                 "createdAt": datetime.utcnow()
             }}}
         )
+
+        # Set cookies for session + CSRF
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+            path="/auth"
+        )
+        csrf_token = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key="csrf_token",
+            value=csrf_token,
+            httponly=False,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+            path="/"
+        )
         
+        # Update trust score
+        await update_user_trust_score(user_id)
+
         # Return success with tokens
         return {
             "message": "Email verified successfully! You can now complete your profile.",
             "emailVerified": True,
             "accessToken": access_token,
-            "refreshToken": refresh_token,
             "user": {
                 "id": user_id,
                 "email": user["email"],
@@ -323,7 +398,7 @@ class VerifyCodeRequest(BaseModel):
 
 
 @router.post("/verify-email-code")
-async def verify_email_code(data: VerifyCodeRequest):
+async def verify_email_code(data: VerifyCodeRequest, response: Response):
     """
     Verify email address with 6-digit code from email
     """
@@ -332,7 +407,7 @@ async def verify_email_code(data: VerifyCodeRequest):
         code = data.code.strip()
         
         logger.debug(f"Verifying email: {email}")
-        logger.debug(f"Code received: {code}")
+        logger.debug(f"Code received: ****{code[-2:] if len(code) > 2 else '**'}")
         
         # First, find user by email
         user_check = await get_db().users.find_one({
@@ -341,7 +416,7 @@ async def verify_email_code(data: VerifyCodeRequest):
         
         if user_check:
             logger.debug(f"User found: {user_check.get('email')}")
-            logger.debug(f"Stored code: {user_check.get('emailVerificationCode')}")
+            logger.debug(f"Stored code: ****{user_check.get('emailVerificationCode', '')[-2:] if len(user_check.get('emailVerificationCode', '')) > 2 else '**'}")
             logger.debug(f"Code expires: {user_check.get('emailVerificationExpires')}")
             logger.debug(f"Current time: {datetime.utcnow()}")
         else:
@@ -391,17 +466,51 @@ async def verify_email_code(data: VerifyCodeRequest):
         await get_db().users.update_one(
             {"_id": user["_id"]},
             {"$push": {"refreshTokens": {
-                "token": refresh_token,
+                "token": hash_refresh_token(refresh_token),
                 "createdAt": datetime.utcnow()
             }}}
         )
+
+        # Set cookies for session + CSRF
+        # NOTE: For localhost cross-port (5173 -> 8080), we need SameSite=None; Secure
+        # This works on localhost even with HTTP in modern browsers
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,  # Required for SameSite=None
+            samesite="none",
+            max_age=settings.JWT_ACCESS_TTL,
+            path="/"
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=14 * 24 * 60 * 60,
+            path="/auth"
+        )
+        csrf_token = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key="csrf_token",
+            value=csrf_token,
+            httponly=False,
+            secure=True,
+            samesite="none",
+            max_age=14 * 24 * 60 * 60,
+            path="/"
+        )
         
+        # Update trust score
+        await update_user_trust_score(user_id)
+
         # Return success with tokens
         return {
             "message": "Email verified successfully! You can now complete your profile.",
             "emailVerified": True,
             "accessToken": access_token,
-            "refreshToken": refresh_token,
             "user": {
                 "id": user_id,
                 "email": user["email"],
@@ -456,7 +565,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
     generic_error = "Invalid email or password"
     
     # Check rate limit
-    allowed, message = check_rate_limit(email, ip_address)
+    allowed, message = await check_rate_limit(email, ip_address)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -471,7 +580,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         
         # CRITICAL: Don't reveal if email exists or not
         if not user:
-            record_failed_attempt(email)
+            await record_failed_attempt(email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=generic_error
@@ -493,7 +602,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         
         # Check if password exists (for OAuth users)
         if not user.get("passwordHash"):
-            record_failed_attempt(email)
+            await record_failed_attempt(email)
             provider = user.get("provider", "social")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -503,7 +612,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         # Verify password - CRITICAL FIX
         password_valid = verify_password(credentials.password, user["passwordHash"])
         if not password_valid:
-            record_failed_attempt(email)
+            await record_failed_attempt(email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=generic_error
@@ -530,7 +639,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             {
                 "$push": {
                     "refreshTokens": {
-                        "token": refresh_token,
+                        "token": hash_refresh_token(refresh_token),
                         "createdAt": datetime.utcnow(),
                         "expiresAt": datetime.utcnow() + timedelta(days=14),
                         "userAgent": request.headers.get("User-Agent", ""),
@@ -563,19 +672,39 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         
         # Set refresh token in httpOnly cookie
         response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.JWT_ACCESS_TTL,
+            path="/"
+        )
+        response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=settings.NODE_ENV == "production",
-            samesite="lax",
+            secure=True,
+            samesite="none",
             max_age=14 * 24 * 60 * 60,  # 14 days
             path="/auth"
+        )
+
+        # Issue CSRF token (double submit cookie strategy)
+        csrf_token = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key="csrf_token",
+            value=csrf_token,
+            httponly=False,
+            secure=True,
+            samesite="none",
+            max_age=14 * 24 * 60 * 60,
+            path="/"
         )
         
         # Return response with user data and profileComplete (frontend expects this format)
         return {
             "accessToken": access_token,  # camelCase for frontend
-            "refreshToken": refresh_token,  # Include in response body
             "tokenType": "bearer",
             "expiresIn": 900,
             "user": {
@@ -591,7 +720,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         raise
     except Exception as e:
         logger.error(f"Login error: {str(e)}")  # Debug log
-        record_failed_attempt(email)
+        await record_failed_attempt(email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=generic_error
@@ -633,9 +762,10 @@ async def refresh_token(request: Request, response: Response):
         )
     
     try:
-        # Find user with this refresh token
+        # Find user with this refresh token (hashed)
+        hashed_token = hash_refresh_token(refresh_token)
         user = await get_db().users.find_one({
-            "refreshTokens.token": refresh_token,
+            "refreshTokens.token": hashed_token,
             "refreshTokens.expiresAt": {"$gt": datetime.utcnow()}
         })
         
@@ -660,10 +790,10 @@ async def refresh_token(request: Request, response: Response):
         await get_db().users.update_one(
             {"_id": user["_id"]},
             {
-                "$pull": {"refreshTokens": {"token": refresh_token}},
+                "$pull": {"refreshTokens": {"token": hashed_token}},
                 "$push": {
                     "refreshTokens": {
-                        "token": new_refresh_token,
+                        "token": hash_refresh_token(new_refresh_token),
                         "createdAt": datetime.utcnow(),
                         "expiresAt": datetime.utcnow() + timedelta(days=14),
                         "userAgent": request.headers.get("User-Agent", ""),
@@ -675,13 +805,34 @@ async def refresh_token(request: Request, response: Response):
         
         # Update cookie with new refresh token
         response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.JWT_ACCESS_TTL,
+            path="/"
+        )
+        response.set_cookie(
             key="refresh_token",
             value=new_refresh_token,
             httponly=True,
-            secure=settings.NODE_ENV == "production",
-            samesite="lax",
+            secure=True,
+            samesite="none",
             max_age=14 * 24 * 60 * 60,
             path="/auth"
+        )
+
+        # Rotate CSRF token alongside refresh token
+        csrf_token = secrets.token_urlsafe(32)
+        response.set_cookie(
+            key="csrf_token",
+            value=csrf_token,
+            httponly=False,
+            secure=True,
+            samesite="none",
+            max_age=14 * 24 * 60 * 60,
+            path="/"
         )
         
         return {
@@ -709,13 +860,16 @@ async def logout(request: Request, response: Response, current_user: dict = Depe
         # Remove refresh token from database
         refresh_token = request.cookies.get("refresh_token")
         if refresh_token:
+            hashed_token = hash_refresh_token(refresh_token)
             await get_db().users.update_one(
                 {"_id": current_user["_id"]},
-                {"$pull": {"refreshTokens": {"token": refresh_token}}}
+                {"$pull": {"refreshTokens": {"token": hashed_token}}}
             )
         
         # Clear cookie
         response.delete_cookie("refresh_token", path="/auth")
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("csrf_token", path="/")
         
         return {"message": "Logged out successfully"}
         
@@ -855,7 +1009,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
             "verified": True
         })
         
-        refresh_token = generate_refresh_token()
+        refresh_token = create_refresh_token({"sub": user_id})
         
         # Store refresh token
         await get_db().users.update_one(
@@ -863,7 +1017,7 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
             {
                 "$push": {
                     "refreshTokens": {
-                        "token": refresh_token,
+                        "token": hash_refresh_token(refresh_token),
                         "createdAt": datetime.utcnow(),
                         "expiresAt": datetime.utcnow() + timedelta(days=14),
                         "userAgent": request.headers.get("User-Agent", ""),
@@ -878,11 +1032,20 @@ async def oauth_callback(request: Request, response: Response, data: OAuthCallba
         
         # Set cookie
         response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=settings.JWT_ACCESS_TTL,
+            path="/"
+        )
+        response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=settings.NODE_ENV == "production",
-            samesite="lax",
+            secure=True,
+            samesite="none",
             max_age=14 * 24 * 60 * 60,
             path="/auth"
         )
@@ -1525,7 +1688,7 @@ async def forgot_password(data: ForgotPasswordRequest):
                     subject="Password Reset Code",
                     template_type="reset"  # Use different template for reset
                 )
-                logger.info(f"Password reset code sent to {email}: {reset_code}")
+                logger.info(f"Password reset code sent to {email[:3]}***@{email.split('@')[1]}")
             except Exception as e:
                 logger.warning(f"Failed to send reset email: {e}")
                 # Continue anyway - code is stored in database
@@ -1613,10 +1776,12 @@ async def reset_password(data: ResetPasswordRequest):
             {"_id": user["_id"]},
             {
                 "$set": {
-                    "password": hashed_password,
-                    "passwordChangedAt": datetime.utcnow()
+                    "passwordHash": hashed_password,
+                    "passwordChangedAt": datetime.utcnow(),
+                    "refreshTokens": []  # Revoke all sessions
                 },
                 "$unset": {
+                    "password": "",  # Remove legacy field if exists
                     "passwordResetCode": "",
                     "passwordResetToken": "",
                     "passwordResetExpires": ""
@@ -1624,7 +1789,7 @@ async def reset_password(data: ResetPasswordRequest):
             }
         )
         
-        logger.info(f"Password reset successful for {email}")
+        logger.info(f"Password reset successful for {email[:3]}***@{email.split('@')[1]}")
         
         return {
             "message": "Password reset successful",

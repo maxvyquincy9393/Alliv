@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Upload, X, MapPin, Calendar, ArrowLeft } from 'lucide-react';
-import { Layout } from '../components/Layout';
-import { GlassButton } from '../components/GlassButton';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { fadeInUp, stagger } from '../lib/motion';
 import { useAuth } from '../hooks/useAuth';
 
@@ -130,8 +129,8 @@ export const CreateProject = () => {
   }
 
   return (
-    <Layout>
-      <div className="max-w-3xl mx-auto px-4 py-8">
+    <FullScreenLayout>
+      <div className="max-w-3xl mx-auto px-4 py-8 pt-24">
         <motion.div
           variants={stagger(0.1)}
           initial="hidden"
@@ -152,7 +151,7 @@ export const CreateProject = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Basic Information</h2>
               
               {/* Title */}
@@ -164,7 +163,7 @@ export const CreateProject = () => {
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="e.g., AI-Powered Social App"
                 />
                 {errors.title && <p className="text-red-400 text-sm mt-1">{errors.title}</p>}
@@ -178,7 +177,7 @@ export const CreateProject = () => {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors resize-none"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   placeholder="Describe your project, its goals, and what makes it exciting..."
                   rows={4}
                 />
@@ -193,7 +192,7 @@ export const CreateProject = () => {
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                 >
                   <option value="">Select a category</option>
                   {categories.map(cat => (
@@ -228,7 +227,7 @@ export const CreateProject = () => {
                       </button>
                     </div>
                   ) : (
-                    <label className="w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-xl hover:border-white/40 cursor-pointer transition-colors">
+                    <label className="w-32 h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-xl hover:border-white/40 cursor-pointer transition-colors bg-white/5">
                       <Upload className="w-8 h-8 text-white/40 mb-2" />
                       <span className="text-xs text-white/40">Upload</span>
                       <input
@@ -245,7 +244,7 @@ export const CreateProject = () => {
             </motion.div>
 
             {/* Team Requirements */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Team Requirements</h2>
               
               {/* Roles Needed */}
@@ -257,7 +256,7 @@ export const CreateProject = () => {
                   {formData.rolesNeeded.map((role, index) => (
                     <span
                       key={index}
-                      className="px-3 py-1 bg-accent-blue/20 text-accent-blue rounded-full text-sm flex items-center gap-2"
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm flex items-center gap-2 border border-blue-500/30"
                     >
                       {role}
                       <button
@@ -273,7 +272,7 @@ export const CreateProject = () => {
                 <button
                   type="button"
                   onClick={addRole}
-                  className="px-4 py-2 glass rounded-lg text-sm text-white/60 hover:text-white transition-colors"
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white/60 hover:text-white transition-colors"
                 >
                   + Add Role
                 </button>
@@ -293,8 +292,8 @@ export const CreateProject = () => {
                       onClick={() => toggleSkill(skill)}
                       className={`px-3 py-1 rounded-full text-sm transition-all ${
                         formData.skills.includes(skill)
-                          ? 'bg-accent-blue text-white'
-                          : 'glass text-white/70 hover:text-white'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white/5 text-white/70 hover:text-white border border-white/10'
                       }`}
                     >
                       {skill}
@@ -306,7 +305,7 @@ export const CreateProject = () => {
             </motion.div>
 
             {/* Location & Timeline */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Location & Timeline</h2>
               
               {/* Remote Toggle */}
@@ -316,7 +315,7 @@ export const CreateProject = () => {
                     type="checkbox"
                     checked={formData.isRemote}
                     onChange={(e) => setFormData({ ...formData, isRemote: e.target.checked })}
-                    className="w-5 h-5 rounded"
+                    className="w-5 h-5 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500"
                   />
                   <span className="text-white/80">This is a remote project</span>
                 </label>
@@ -333,7 +332,7 @@ export const CreateProject = () => {
                     type="text"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                     placeholder="City, Country"
                   />
                   {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
@@ -350,7 +349,7 @@ export const CreateProject = () => {
                   type="date"
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
                 />
               </div>
 
@@ -363,7 +362,7 @@ export const CreateProject = () => {
                   type="text"
                   value={formData.budget}
                   onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="e.g., Equity-based, $5000, Volunteer"
                 />
               </div>
@@ -382,26 +381,24 @@ export const CreateProject = () => {
 
             {/* Submit Buttons */}
             <motion.div variants={fadeInUp} className="flex gap-4">
-              <GlassButton
-                variant="secondary"
+              <button
                 onClick={() => navigate('/projects')}
-                fullWidth
                 type="button"
+                className="flex-1 px-6 py-3 rounded-xl font-semibold bg-white/5 text-white hover:bg-white/10 transition-all border border-white/10"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
-                variant="primary"
+              </button>
+              <button
                 type="submit"
-                fullWidth
                 disabled={loading}
+                className="flex-1 btn-primary px-6 py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating...' : 'Create Project'}
-              </GlassButton>
+              </button>
             </motion.div>
           </form>
         </motion.div>
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };

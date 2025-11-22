@@ -1,196 +1,176 @@
 import os
-import sys
-import secrets
 from typing import Optional
-from urllib.parse import urlparse, urlunparse
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+from pydantic import field_validator, Field, ConfigDict
 
-# Load environment variables
-load_dotenv()
-
-DEFAULT_JWT_ACCESS_SECRET = "dev_jwt_access_secret_012345678901234567"
-DEFAULT_JWT_REFRESH_SECRET = "dev_jwt_refresh_secret_01234567890123"
-DEFAULT_REFRESH_TOKEN_FINGERPRINT_PEPPER = "dev_refresh_fingerprint_pepper_0123456789"
-
-
-def _build_mongo_uri() -> str:
-    """Derive Mongo connection string with sensible fallbacks."""
-    mongo_uri = os.getenv("MONGO_URI") or os.getenv("MONGODB_URI")
-    db_name = (
-        os.getenv("MONGO_DB_NAME")
-        or os.getenv("DATABASE_NAME")
-        or "colabmatch"
-    )
-
-    if mongo_uri:
-        parsed = urlparse(mongo_uri)
-        # If no database specified, append the fallback db name
-        if not parsed.path or parsed.path == "/":
-            parsed = parsed._replace(path=f"/{db_name}")
-            return urlunparse(parsed)
-        return mongo_uri
-
-    host = os.getenv("MONGO_HOST", "localhost")
-    port = os.getenv("MONGO_PORT", "27017")
-    return f"mongodb://{host}:{port}/{db_name}"
-
-
-class Settings:
+class Settings(BaseSettings):
     """Application settings with validation"""
     
     # Application
-    NODE_ENV: str = os.getenv("NODE_ENV", "development")
-    DEBUG: bool = os.getenv("NODE_ENV", "development") == "development"  # Show debug info in dev mode
-    PORT: int = int(os.getenv("PORT", "8080"))
-    CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "http://localhost:5173")
+    NODE_ENV: str = Field(default="development", validation_alias="NODE_ENV")
+    DEBUG: bool = Field(default=False, validation_alias="DEBUG")
+    PORT: int = Field(default=8080, validation_alias="PORT")
+    CORS_ORIGIN: str = Field(default="http://localhost:5173,http://localhost:5174", validation_alias="CORS_ORIGIN")
+    ALLOWED_HOSTS: str = Field(default="localhost,127.0.0.1", validation_alias="ALLOWED_HOSTS")
     
     # Database
-    MONGO_URI: str = _build_mongo_uri()
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    MONGO_URI: str = Field(..., validation_alias="MONGO_URI")
+    REDIS_URL: str = Field(default="redis://localhost:6379", validation_alias="REDIS_URL")
     
-    # JWT & Sessions (REQUIRED - no defaults for production!)
-    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", "")
-    JWT_REFRESH_SECRET: str = os.getenv("JWT_REFRESH_SECRET", "")
-    JWT_ACCESS_TTL: int = int(os.getenv("JWT_ACCESS_TTL", "900"))
-    JWT_REFRESH_TTL: int = int(os.getenv("JWT_REFRESH_TTL", "1209600"))
-    REFRESH_TOKEN_FINGERPRINT_PEPPER: str = os.getenv("REFRESH_TOKEN_FINGERPRINT_PEPPER", "")
+    # JWT & Sessions - MUST be secure!
+    JWT_ACCESS_SECRET: str = Field(..., validation_alias="JWT_ACCESS_SECRET")
+    JWT_REFRESH_SECRET: str = Field(..., validation_alias="JWT_REFRESH_SECRET")
+    JWT_ACCESS_TTL: int = Field(default=900, validation_alias="JWT_ACCESS_TTL")
+    JWT_REFRESH_TTL: int = Field(default=1209600, validation_alias="JWT_REFRESH_TTL")
+    REFRESH_TOKEN_FINGERPRINT_PEPPER: str = Field(..., validation_alias="REFRESH_TOKEN_FINGERPRINT_PEPPER")
     JWT_ALGORITHM: str = "HS256"
     
     # OAuth
-    OAUTH_REDIRECT_BASE: str = os.getenv("OAUTH_REDIRECT_BASE", "http://localhost:8080/auth/oauth")
-    OAUTH_GOOGLE_ID: str = os.getenv("OAUTH_GOOGLE_ID", "")
-    OAUTH_GOOGLE_SECRET: str = os.getenv("OAUTH_GOOGLE_SECRET", "")
-    OAUTH_FACEBOOK_APP_ID: str = os.getenv("OAUTH_FACEBOOK_APP_ID", "")
-    OAUTH_FACEBOOK_APP_SECRET: str = os.getenv("OAUTH_FACEBOOK_APP_SECRET", "")
-    OAUTH_GITHUB_ID: str = os.getenv("OAUTH_GITHUB_ID", "")
-    OAUTH_GITHUB_SECRET: str = os.getenv("OAUTH_GITHUB_SECRET", "")
-    OAUTH_X_ID: str = os.getenv("OAUTH_X_ID", "")
-    OAUTH_X_SECRET: str = os.getenv("OAUTH_X_SECRET", "")
-    
-    # Frontend URL for OAuth redirects
-    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8080")
+    OAUTH_REDIRECT_BASE: str = Field(default="http://localhost:8080/auth/oauth", validation_alias="OAUTH_REDIRECT_BASE")
+    OAUTH_GOOGLE_ID: str = Field(default="", validation_alias="OAUTH_GOOGLE_ID")
+    OAUTH_GOOGLE_SECRET: str = Field(default="", validation_alias="OAUTH_GOOGLE_SECRET")
+    OAUTH_GITHUB_ID: str = Field(default="", validation_alias="OAUTH_GITHUB_ID")
+    OAUTH_GITHUB_SECRET: str = Field(default="", validation_alias="OAUTH_GITHUB_SECRET")
+    OAUTH_X_ID: str = Field(default="", validation_alias="OAUTH_X_ID")
+    OAUTH_X_SECRET: str = Field(default="", validation_alias="OAUTH_X_SECRET")
+    OAUTH_FACEBOOK_APP_ID: str = Field(default="", validation_alias="OAUTH_FACEBOOK_APP_ID")
+    OAUTH_FACEBOOK_APP_SECRET: str = Field(default="", validation_alias="OAUTH_FACEBOOK_APP_SECRET")
     
     # Email/SMS Verification
-    SMTP_URL: str = os.getenv("SMTP_URL", "")
-    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "noreply@alliv.app")
-    SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "mock")
-    SMS_PROVIDER_API_KEY: str = os.getenv("SMS_PROVIDER_API_KEY", "")
+    SMTP_URL: str = Field(default="", validation_alias="SMTP_URL")
+    EMAIL_FROM: str = Field(default="noreply@alliv.app", validation_alias="EMAIL_FROM")
+    SMS_PROVIDER: str = Field(default="mock", validation_alias="SMS_PROVIDER")
+    SMS_PROVIDER_API_KEY: str = Field(default="", validation_alias="SMS_PROVIDER_API_KEY")
     
     # Cloudinary
-    CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
-    CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
-    CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
+    CLOUDINARY_CLOUD_NAME: str = Field(default="", validation_alias="CLOUDINARY_CLOUD_NAME")
+    CLOUDINARY_API_KEY: str = Field(default="", validation_alias="CLOUDINARY_API_KEY")
+    CLOUDINARY_API_SECRET: str = Field(default="", validation_alias="CLOUDINARY_API_SECRET")
     
     # Maps
-    MAPS_API_KEY: str = os.getenv("MAPS_API_KEY", "")
+    MAPS_API_KEY: str = Field(default="", validation_alias="MAPS_API_KEY")
     
-    # Security & Rate Limiting
-    RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
-    RATE_LIMIT_MAX: int = int(os.getenv("RATE_LIMIT_MAX", "100"))
-    TRUSTED_PROXY: bool = os.getenv("TRUSTED_PROXY", "false").lower() == "true"
+    # Monitoring & Error Tracking
+    SENTRY_DSN: str = Field(default="", validation_alias="SENTRY_DSN")
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, validation_alias="SENTRY_TRACES_SAMPLE_RATE")
+    
+    # CAPTCHA
+    RECAPTCHA_SECRET_KEY: str = Field(default="", validation_alias="RECAPTCHA_SECRET_KEY")
+    RECAPTCHA_SITE_KEY: str = Field(default="", validation_alias="RECAPTCHA_SITE_KEY")
+    
+    # AI Matching Engine
+    USE_AI_MATCHING: bool = Field(default=True, validation_alias="USE_AI_MATCHING")
+    OPENAI_API_KEY: str = Field(default="", validation_alias="OPENAI_API_KEY")  # Optional for GPT features
+    MATCHING_CACHE_TTL: int = Field(default=3600, validation_alias="MATCHING_CACHE_TTL")  # 1 hour
+    
+    # Frontend URL
+    FRONTEND_URL: str = Field(default="http://localhost:3000", validation_alias="FRONTEND_URL")
+    BACKEND_URL: str = Field(default="http://localhost:8080", validation_alias="BACKEND_URL")
 
-    def __init__(self):
-        """Initialize and validate configuration"""
-        self._validate_required_vars()
-        self._validate_secrets()
-        self._validate_urls()
-        self._validate_cors()
+    # Validators
+    @field_validator('JWT_ACCESS_SECRET')
+    @classmethod
+    def validate_access_secret(cls, v):
+        if v == "change_this_secret":
+            raise ValueError(
+                "[SECURITY ERROR] JWT_ACCESS_SECRET cannot be the default value! "
+                "Please set a secure random string (min 32 chars) in .env file."
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"[SECURITY ERROR] JWT_ACCESS_SECRET too short ({len(v)} chars). "
+                "Minimum 32 characters required for security."
+            )
+        return v
+    
+    @field_validator('JWT_REFRESH_SECRET')
+    @classmethod
+    def validate_refresh_secret(cls, v):
+        if v == "change_this_refresh_secret":
+            raise ValueError(
+                "[SECURITY ERROR] JWT_REFRESH_SECRET cannot be the default value! "
+                "Please set a secure random string (min 32 chars) in .env file."
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"[SECURITY ERROR] JWT_REFRESH_SECRET too short ({len(v)} chars). "
+                "Minimum 32 characters required for security."
+            )
+        return v
+    
+    @field_validator('REFRESH_TOKEN_FINGERPRINT_PEPPER')
+    @classmethod
+    def validate_pepper(cls, v):
+        if v == "change_this_pepper":
+            raise ValueError(
+                "[SECURITY ERROR] REFRESH_TOKEN_FINGERPRINT_PEPPER cannot be default! "
+                "Please set a secure random string (min 32 chars) in .env file."
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"[SECURITY ERROR] Fingerprint pepper too short ({len(v)} chars). "
+                "Minimum 32 characters required."
+            )
+        return v
+    
+    @field_validator('MONGO_URI')
+    @classmethod
+    def validate_mongo_uri(cls, v):
+        if not v.startswith('mongodb://') and not v.startswith('mongodb+srv://'):
+            raise ValueError(
+                "[CONFIG ERROR] MONGO_URI must start with 'mongodb://' or 'mongodb+srv://'"
+            )
+        return v
+    
+    @field_validator('NODE_ENV')
+    @classmethod
+    def validate_node_env(cls, v):
+        allowed = ['development', 'staging', 'production', 'test']
+        if v not in allowed:
+            raise ValueError(
+                f"[CONFIG ERROR] NODE_ENV must be one of {allowed}, got '{v}'"
+            )
+        return v
+    
+    @field_validator('MAPS_API_KEY')
+    @classmethod
+    def validate_maps_key(cls, v, info):
+        node_env = info.data.get('NODE_ENV', 'development')
+        if node_env == 'production' and not v:
+            raise ValueError(
+                "[CONFIG ERROR] MAPS_API_KEY is required in production. "
+                "Set MAPS_API_KEY in .env file."
+            )
+        return v
+    
+    @field_validator('CLOUDINARY_CLOUD_NAME')
+    @classmethod
+    def validate_cloudinary(cls, v, info):
+        node_env = info.data.get('NODE_ENV', 'development')
+        if node_env == 'production' and not v:
+            raise ValueError(
+                "[CONFIG ERROR] CLOUDINARY_CLOUD_NAME is required in production. "
+                "Configure Cloudinary credentials in .env file."
+            )
+        return v
+    
+    @field_validator('SMTP_URL')
+    @classmethod
+    def validate_smtp(cls, v, info):
+        node_env = info.data.get('NODE_ENV', 'development')
+        if node_env == 'production' and not v:
+            raise ValueError(
+                "[CONFIG ERROR] SMTP_URL is required in production for email delivery. "
+                "Configure email service in .env file."
+            )
+        return v
+    
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore",
+        case_sensitive=True
+    )
 
-    def _validate_required_vars(self):
-        """Validate that required environment variables are set"""
-        required_vars = []
-        
-        # Required in production
-        if self.NODE_ENV == "production":
-            if not os.getenv("JWT_ACCESS_SECRET"):
-                required_vars.append("JWT_ACCESS_SECRET (min 32 chars)")
-            if not os.getenv("JWT_REFRESH_SECRET"):
-                required_vars.append("JWT_REFRESH_SECRET (min 32 chars)")
-            if not os.getenv("REFRESH_TOKEN_FINGERPRINT_PEPPER"):
-                required_vars.append("REFRESH_TOKEN_FINGERPRINT_PEPPER (min 32 chars)")
-        
-        if required_vars:
-            print("\n[ERROR] Configuration Error: Missing required environment variables")
-            print("\n📋 Required variables:")
-            for var in required_vars:
-                print(f"  - {var}")
-            print("\n[TIP] Create a .env file with these variables.")
-            print("   Run: python generate_secrets.py")
-            sys.exit(1)
 
-    def _validate_urls(self):
-        """Validate URL formats"""
-        # Validate MongoDB URI
-        if not self.MONGO_URI.startswith('mongodb://') and not self.MONGO_URI.startswith('mongodb+srv://'):
-            print("\n[ERROR] Configuration Error: Invalid MONGO_URI format")
-            print("   Must start with 'mongodb://' or 'mongodb+srv://'")
-            sys.exit(1)
-        
-        # Validate Redis URL if set
-        if self.REDIS_URL and not self.REDIS_URL.startswith('redis://'):
-            print("\n[WARN] Warning: REDIS_URL should start with 'redis://'")
-
-    def _validate_cors(self):
-        """Validate CORS configuration"""
-        if self.NODE_ENV == "production" and self.CORS_ORIGIN == "*":
-            print("\n[ERROR] Configuration Error: CORS_ORIGIN cannot be '*' in production")
-            print("   Set a specific origin like: https://yourdomain.com")
-            sys.exit(1)
-
-    def _validate_secrets(self):
-        """Validate required secrets for security"""
-        if self.NODE_ENV == "production":
-            # Production requires strong secrets
-            if not self.JWT_ACCESS_SECRET or len(self.JWT_ACCESS_SECRET) < 32:
-                raise ValueError(
-                    "JWT_ACCESS_SECRET must be at least 32 characters in production.\n"
-                    "Generate one with: python generate_secrets.py"
-                )
-            
-            if not self.JWT_REFRESH_SECRET or len(self.JWT_REFRESH_SECRET) < 32:
-                raise ValueError(
-                    "JWT_REFRESH_SECRET must be at least 32 characters in production.\n"
-                    "Generate one with: python generate_secrets.py"
-                )
-            
-            if not self.REFRESH_TOKEN_FINGERPRINT_PEPPER or len(self.REFRESH_TOKEN_FINGERPRINT_PEPPER) < 32:
-                raise ValueError(
-                    "REFRESH_TOKEN_FINGERPRINT_PEPPER must be at least 32 characters in production.\n"
-                    "Generate one with: python generate_secrets.py"
-                )
-        else:
-            # Development mode - generate temporary secrets if missing
-            if not self.JWT_ACCESS_SECRET:
-                print("[WARN] WARNING: No JWT_ACCESS_SECRET found, using development fallback")
-                self.JWT_ACCESS_SECRET = DEFAULT_JWT_ACCESS_SECRET
-            
-            if not self.JWT_REFRESH_SECRET:
-                print("[WARN] WARNING: No JWT_REFRESH_SECRET found, using development fallback")
-                self.JWT_REFRESH_SECRET = DEFAULT_JWT_REFRESH_SECRET
-            
-            if not self.REFRESH_TOKEN_FINGERPRINT_PEPPER:
-                print("[WARN] WARNING: No REFRESH_TOKEN_FINGERPRINT_PEPPER found, using development fallback")
-                self.REFRESH_TOKEN_FINGERPRINT_PEPPER = DEFAULT_REFRESH_TOKEN_FINGERPRINT_PEPPER
-            
-            # Warn about weak secrets
-            if "change_this" in self.JWT_ACCESS_SECRET:
-                print("[WARN] WARNING: Using weak JWT_ACCESS_SECRET in development mode")
-            if "change_this" in self.JWT_REFRESH_SECRET:
-                print("[WARN] WARNING: Using weak JWT_REFRESH_SECRET in development mode")
-            if "change_this" in self.REFRESH_TOKEN_FINGERPRINT_PEPPER:
-                print("[WARN] WARNING: Using weak REFRESH_TOKEN_FINGERPRINT_PEPPER in development mode")
-
-
-# Create settings instance with validation
-try:
-    settings = Settings()
-    print("[OK] Configuration loaded successfully")
-    if settings.NODE_ENV == "development":
-        print(f"   Environment: {settings.NODE_ENV}")
-        print(f"   MongoDB: {settings.MONGO_URI[:20]}...")
-        print(f"   CORS: {settings.CORS_ORIGIN}")
-except Exception as e:
-    print(f"\n[ERROR] Configuration Error: {e}")
-    print("\n[TIP] Check your .env file or environment variables")
-    sys.exit(1)
+# Create singleton instance
+settings = Settings()

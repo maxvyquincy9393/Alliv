@@ -24,7 +24,8 @@ async def create_indexes():
             ("bio", TEXT)
         ])
         # Filtering
-        await db.profiles.create_index("userId")
+        # Ensure userId is unique (one profile per user)
+        await db.profiles.create_index("userId", unique=True)
         await db.profiles.create_index("field")
         await db.profiles.create_index("location_city")
         

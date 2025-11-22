@@ -9,7 +9,7 @@ Handles:
 """
 from celery import Celery
 from celery.schedules import crontab
-from .config_validated import settings
+from .config import settings
 
 # Create Celery instance
 celery_app = Celery(

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Navigation, Users, Filter, X } from 'lucide-react';
-import { GlassButton } from '../components/GlassButton';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { fadeInUp, stagger } from '../lib/motion';
 import { useGeolocation } from '../hooks/useGeolocation';
 
@@ -123,8 +123,8 @@ export const Nearby = () => {
         if (location) {
           L.circle([location.latitude, location.longitude], {
             radius: searchRadius * 1000,
-            color: '#6E9EFF',
-            fillColor: '#6E9EFF',
+            color: '#3B82F6',
+            fillColor: '#3B82F6',
             fillOpacity: 0.1,
             weight: 2
           }).addTo(map);
@@ -143,281 +143,289 @@ export const Nearby = () => {
   }, [location, nearbyUsers, searchRadius]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-bg to-dark-surface">
-      {/* Header */}
-      <div className="sticky top-0 z-40 glass-strong border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-6 h-6 text-accent-blue" />
-              <h1 className="text-2xl font-bold text-white">Nearby Collaborators</h1>
-              <span className="px-2 py-1 rounded-full bg-accent-blue/20 text-accent-blue text-sm">
-                {nearbyUsers.length} nearby
-              </span>
+    <FullScreenLayout>
+      <div className="pt-20 pb-8 px-4 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="glass-panel rounded-2xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/20 rounded-lg">
+              <MapPin className="w-6 h-6 text-blue-400" />
             </div>
-
-            {/* View Toggle */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setMapView('map')}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  mapView === 'map' 
-                    ? 'bg-accent-blue text-white' 
-                    : 'glass text-white/60 hover:text-white'
-                }`}
-              >
-                Map View
-              </button>
-              <button
-                onClick={() => setMapView('list')}
-                className={`px-4 py-2 rounded-lg transition-all ${
-                  mapView === 'list' 
-                    ? 'bg-accent-blue text-white' 
-                    : 'glass text-white/60 hover:text-white'
-                }`}
-              >
-                List View
-              </button>
-              
-              <button
-                onClick={() => setFilterOpen(!filterOpen)}
-                className="p-2 glass rounded-lg hover:bg-white/10 transition-colors"
-              >
-                <Filter className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Panel */}
-      <AnimatePresence>
-        {filterOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="border-b border-white/10 glass overflow-hidden"
-          >
-            <div className="max-w-7xl mx-auto px-4 py-4">
-              <div className="flex items-center gap-6">
-                {/* Search Radius */}
-                <div className="flex items-center gap-3">
-                  <span className="text-white/60 text-sm">Radius:</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="50"
-                    value={searchRadius}
-                    onChange={(e) => setSearchRadius(Number(e.target.value))}
-                    className="w-32"
-                  />
-                  <span className="text-white font-medium">{searchRadius} km</span>
-                </div>
-
-                {/* Skills Filter */}
-                <div className="flex items-center gap-3">
-                  <span className="text-white/60 text-sm">Skills:</span>
-                  <select className="bg-dark-surface border border-white/10 rounded-lg px-3 py-1 text-white">
-                    <option value="">All Skills</option>
-                    <option value="developer">Developer</option>
-                    <option value="designer">Designer</option>
-                    <option value="photographer">Photographer</option>
-                  </select>
-                </div>
-
-                {/* Online Only */}
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded" />
-                  <span className="text-white/60 text-sm">Online only</span>
-                </label>
+            <div>
+              <h1 className="text-xl font-bold text-white">Nearby Collaborators</h1>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs border border-blue-500/30">
+                  {nearbyUsers.length} nearby
+                </span>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {mapView === 'map' ? (
-          <div className="relative">
-            {/* Map Container */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="relative h-[600px] rounded-2xl overflow-hidden glass"
+          {/* View Toggle */}
+          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setMapView('map')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                mapView === 'map' 
+                  ? 'bg-white/10 text-white shadow-sm' 
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
             >
-              <div ref={mapRef} className="w-full h-full" />
-              
-              {/* Map Loading State */}
-              {locationLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <div className="text-white flex items-center gap-3">
-                    <Navigation className="w-5 h-5 animate-pulse" />
-                    <span>Getting your location...</span>
-                  </div>
-                </div>
-              )}
+              Map View
+            </button>
+            <button
+              onClick={() => setMapView('list')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                mapView === 'list' 
+                  ? 'bg-white/10 text-white shadow-sm' 
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              List View
+            </button>
+            
+            <div className="w-px h-6 bg-white/10 mx-1" />
+            
+            <button
+              onClick={() => setFilterOpen(!filterOpen)}
+              className={`p-2 rounded-lg transition-colors ${filterOpen ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+            >
+              <Filter className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
 
-              {/* Selected User Card */}
-              <AnimatePresence>
-                {selectedUser && (
-                  <motion.div
-                    initial={{ x: -100, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: -100, opacity: 0 }}
-                    className="absolute left-4 top-4 w-80 glass-strong rounded-xl p-4 shadow-lg"
-                  >
-                    <button
-                      onClick={() => setSelectedUser(null)}
-                      className="absolute right-2 top-2 p-1 hover:bg-white/10 rounded-lg"
+        {/* Filter Panel */}
+        <AnimatePresence>
+          {filterOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 24 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="glass-panel rounded-2xl p-6">
+                <div className="flex flex-wrap items-center gap-6">
+                  {/* Search Radius */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-white/60 text-sm">Radius:</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="50"
+                      value={searchRadius}
+                      onChange={(e) => setSearchRadius(Number(e.target.value))}
+                      className="w-32 accent-blue-500"
+                    />
+                    <span className="text-white font-medium">{searchRadius} km</span>
+                  </div>
+
+                  {/* Skills Filter */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-white/60 text-sm">Skills:</span>
+                    <select className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 [&>option]:bg-slate-900">
+                      <option value="">All Skills</option>
+                      <option value="developer">Developer</option>
+                      <option value="designer">Designer</option>
+                      <option value="photographer">Photographer</option>
+                    </select>
+                  </div>
+
+                  {/* Online Only */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500" />
+                    <span className="text-white/60 text-sm">Online only</span>
+                  </label>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Content */}
+        <div>
+          {mapView === 'map' ? (
+            <div className="relative">
+              {/* Map Container */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="relative h-[600px] rounded-3xl overflow-hidden glass-panel border border-white/10"
+              >
+                <div ref={mapRef} className="w-full h-full" />
+                
+                {/* Map Loading State */}
+                {locationLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="text-white flex items-center gap-3">
+                      <Navigation className="w-5 h-5 animate-pulse text-blue-400" />
+                      <span>Getting your location...</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected User Card */}
+                <AnimatePresence>
+                  {selectedUser && (
+                    <motion.div
+                      initial={{ x: -20, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: -20, opacity: 0 }}
+                      className="absolute left-4 top-4 w-80 glass-panel rounded-2xl p-4 shadow-2xl border border-white/20"
                     >
-                      <X className="w-4 h-4 text-white/60" />
-                    </button>
-                    
-                    <div className="flex items-start gap-3">
-                      <img 
-                        src={selectedUser.avatar} 
-                        alt={selectedUser.name}
-                        className="w-16 h-16 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <h3 className="text-white font-semibold">{selectedUser.name}</h3>
-                        <p className="text-white/60 text-sm">{selectedUser.profession}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <MapPin className="w-3 h-3 text-accent-blue" />
-                          <span className="text-xs text-white/40">{selectedUser.distance} km away</span>
-                          {selectedUser.isOnline && (
-                            <span className="px-2 py-0.5 bg-green-500/20 text-green-500 text-xs rounded-full">
-                              Online
-                            </span>
-                          )}
+                      <button
+                        onClick={() => setSelectedUser(null)}
+                        className="absolute right-2 top-2 p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        <X className="w-4 h-4 text-white/60" />
+                      </button>
+                      
+                      <div className="flex items-start gap-3">
+                        <img 
+                          src={selectedUser.avatar} 
+                          alt={selectedUser.name}
+                          className="w-14 h-14 rounded-xl object-cover border border-white/10"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-bold truncate">{selectedUser.name}</h3>
+                          <p className="text-white/60 text-xs truncate">{selectedUser.profession}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <MapPin className="w-3 h-3 text-blue-400" />
+                            <span className="text-xs text-white/40">{selectedUser.distance} km away</span>
+                            {selectedUser.isOnline && (
+                              <span className="w-2 h-2 rounded-full bg-green-500" />
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex gap-2 mt-4">
-                      {selectedUser.skills.slice(0, 3).map(skill => (
-                        <span key={skill} className="px-2 py-1 bg-accent-blue/20 text-accent-blue text-xs rounded-lg">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                    
-                    <div className="flex gap-2 mt-4">
-                      <GlassButton variant="primary" fullWidth>
-                        Connect
-                      </GlassButton>
-                      <GlassButton variant="secondary" fullWidth>
-                        View Profile
-                      </GlassButton>
-                    </div>
-                  </motion.div>
+                      
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {selectedUser.skills.slice(0, 3).map(skill => (
+                          <span key={skill} className="px-2 py-0.5 bg-white/5 border border-white/10 text-white/70 text-[10px] rounded-full">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 mt-4">
+                        <button className="btn-primary py-2 text-xs">
+                          Connect
+                        </button>
+                        <button className="btn-secondary py-2 text-xs">
+                          Profile
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Location Permission Error */}
+                {locationError && (
+                  <div className="absolute bottom-4 left-4 right-4 glass-panel rounded-xl p-4 border border-red-500/30 bg-red-500/10">
+                    <p className="text-red-400 text-sm flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Location access denied. Enable location to see nearby collaborators.
+                    </p>
+                  </div>
                 )}
-              </AnimatePresence>
+              </motion.div>
 
-              {/* Location Permission Error */}
-              {locationError && (
-                <div className="absolute bottom-4 left-4 right-4 glass-strong rounded-lg p-4 border border-red-500/30">
-                  <p className="text-red-400 text-sm">
-                    Location access denied. Enable location to see nearby collaborators.
-                  </p>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="glass rounded-xl p-4 text-center"
-              >
-                <Users className="w-8 h-8 text-accent-blue mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{nearbyUsers.length}</p>
-                <p className="text-white/60 text-sm">Nearby Users</p>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="glass rounded-xl p-4 text-center"
-              >
-                <Navigation className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{nearbyUsers.filter(u => u.isOnline).length}</p>
-                <p className="text-white/60 text-sm">Online Now</p>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="glass rounded-xl p-4 text-center"
-              >
-                <MapPin className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{searchRadius}</p>
-                <p className="text-white/60 text-sm">km Radius</p>
-              </motion.div>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-3 gap-4 mt-6">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="glass-panel rounded-2xl p-4 text-center"
+                >
+                  <Users className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-white">{nearbyUsers.length}</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider">Nearby</p>
+                </motion.div>
+                
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="glass-panel rounded-2xl p-4 text-center"
+                >
+                  <Navigation className="w-6 h-6 text-green-400 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-white">{nearbyUsers.filter(u => u.isOnline).length}</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider">Online</p>
+                </motion.div>
+                
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="glass-panel rounded-2xl p-4 text-center"
+                >
+                  <MapPin className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-white">{searchRadius}</p>
+                  <p className="text-white/40 text-xs uppercase tracking-wider">km Radius</p>
+                </motion.div>
+              </div>
             </div>
-          </div>
-        ) : (
-          /* List View */
-          <motion.div
-            variants={stagger(0.1)}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
-            {nearbyUsers.map(user => (
-              <motion.div
-                key={user.id}
-                variants={fadeInUp}
-                whileHover={{ y: -4 }}
-                className="glass rounded-xl p-4 hover:shadow-glow-blue transition-all cursor-pointer"
-                onClick={() => setSelectedUser(user)}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="relative">
-                    <img 
-                      src={user.avatar} 
-                      alt={user.name}
-                      className="w-16 h-16 rounded-full"
-                    />
-                    {user.isOnline && (
-                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-dark-surface" />
+          ) : (
+            /* List View */
+            <motion.div
+              variants={stagger(0.1)}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            >
+              {nearbyUsers.map(user => (
+                <motion.div
+                  key={user.id}
+                  variants={fadeInUp}
+                  whileHover={{ y: -4 }}
+                  className="glass-panel rounded-2xl p-5 hover:border-blue-500/30 transition-all cursor-pointer group"
+                  onClick={() => setSelectedUser(user)}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="relative">
+                      <img 
+                        src={user.avatar} 
+                        alt={user.name}
+                        className="w-14 h-14 rounded-xl object-cover border border-white/10 group-hover:border-blue-500/30 transition-colors"
+                      />
+                      {user.isOnline && (
+                        <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0F172A]" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-white font-bold truncate group-hover:text-blue-400 transition-colors">{user.name}</h3>
+                      <p className="text-white/60 text-sm truncate">{user.profession}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <MapPin className="w-3 h-3 text-blue-400" />
+                        <span className="text-xs text-white/40">{user.distance} km</span>
+                        <span className="text-xs text-white/20">•</span>
+                        <span className="text-xs text-green-400">{user.matchScore}% match</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-1.5 mt-4">
+                    {user.skills.slice(0, 3).map(skill => (
+                      <span key={skill} className="px-2.5 py-1 bg-white/5 border border-white/10 text-white/70 text-xs rounded-full">
+                        {skill}
+                      </span>
+                    ))}
+                    {user.skills.length > 3 && (
+                      <span className="px-2 py-1 text-white/40 text-xs">+{user.skills.length - 3}</span>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold">{user.name}</h3>
-                    <p className="text-white/60 text-sm">{user.profession}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <MapPin className="w-3 h-3 text-accent-blue" />
-                      <span className="text-xs text-white/40">{user.distance} km</span>
-                      <span className="text-xs text-accent-blue">•</span>
-                      <span className="text-xs text-accent-blue">{user.matchScore}% match</span>
-                    </div>
+                  
+                  <div className="mt-4 pt-4 border-t border-white/5">
+                    <button className="btn-primary w-full py-2.5 text-sm">
+                      Connect
+                    </button>
                   </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-1 mt-3">
-                  {user.skills.map(skill => (
-                    <span key={skill} className="px-2 py-1 bg-white/5 text-white/60 text-xs rounded">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-                
-                <div className="flex gap-2 mt-4">
-                  <GlassButton variant="primary" fullWidth>
-                    Connect
-                  </GlassButton>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </div>
       </div>
 
       {/* Add Leaflet CSS */}
@@ -438,12 +446,12 @@ export const Nearby = () => {
           position: absolute;
           width: 12px;
           height: 12px;
-          background: #6E9EFF;
+          background: #3B82F6;
           border-radius: 50%;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          box-shadow: 0 0 10px rgba(110, 158, 255, 0.8);
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
         }
         
         .pulse-dot::before {
@@ -451,7 +459,7 @@ export const Nearby = () => {
           position: absolute;
           width: 100%;
           height: 100%;
-          background: #6E9EFF;
+          background: #3B82F6;
           border-radius: 50%;
           animation: pulse 2s infinite;
         }
@@ -468,20 +476,26 @@ export const Nearby = () => {
         }
         
         .leaflet-popup-content-wrapper {
-          background: rgba(15, 19, 34, 0.95);
-          backdrop-filter: blur(10px);
+          background: rgba(15, 23, 42, 0.95);
+          backdrop-filter: blur(12px);
           border: 1px solid rgba(255, 255, 255, 0.1);
           color: white;
           border-radius: 12px;
+          padding: 0;
         }
         
         .leaflet-popup-tip {
-          background: rgba(15, 19, 34, 0.95);
+          background: rgba(15, 23, 42, 0.95);
+        }
+
+        .leaflet-container {
+          background: #0F172A;
+          font-family: inherit;
         }
       `}</style>
 
       {/* Load Leaflet Script */}
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" async></script>
-    </div>
+    </FullScreenLayout>
   );
 };

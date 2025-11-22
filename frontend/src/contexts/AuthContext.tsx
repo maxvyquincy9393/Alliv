@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthUser & { profileComplete?: boolean }>;
   register: (data: { name: string; email: string; password: string; birthdate?: string }) => Promise<any>;
   logout: () => Promise<void>;
+  setAuthUser: (user: AuthUser) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,11 +19,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const setAuthUser = useCallback((userData: AuthUser) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+    socketService.connect(userData.id);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
     const restoreSession = async () => {
-      const token = localStorage.getItem('access_token');
+      // Cookie-based session: No need to check localStorage for tokens
+      // Backend will validate session via HttpOnly cookie
       const storedUserStr = localStorage.getItem('user');
       const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
 
@@ -31,13 +39,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         socketService.connect(storedUser.id);
       }
 
-      if (!token) {
-        if (isMounted) setLoading(false);
-        return;
-      }
-
       try {
-        // Verify token and get fresh user data
+        // Try to restore session from cookie
         const response = await api.profile.getMe();
         if (!isMounted) return;
 
@@ -47,17 +50,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem('user', JSON.stringify(freshUser));
           socketService.connect(freshUser.id);
         } else if (response.error) {
-          // Token invalid or expired
-          console.error('Session restore failed:', response.error);
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          // No valid session
           localStorage.removeItem('user');
           setUser(null);
         }
       } catch (error) {
         console.error('Session restore error:', error);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         if (isMounted) setUser(null);
       } finally {
@@ -81,16 +79,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(response.error);
       }
 
-      // The backend returns { accessToken, refreshToken, user }
-      // api.ts types might be incomplete, but we can access data
+      // Backend sets HttpOnly cookies for tokens
+      // We only need to handle user data
       const data = response.data as any;
-
-      if (data?.accessToken) {
-        localStorage.setItem('access_token', data.accessToken);
-      }
-      if (data?.refreshToken) {
-        localStorage.setItem('refresh_token', data.refreshToken);
-      }
 
       const userData = data?.user;
       if (userData) {
@@ -102,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Fallback: fetch user if not in login response
         const userResp = await api.profile.getMe();
         if (userResp.data) {
+          // access token already set via cookie; clear any stale local copy
           setUser(userResp.data);
           localStorage.setItem('user', JSON.stringify(userResp.data));
           socketService.connect(userResp.data.id);
@@ -130,13 +122,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(response.error);
       }
 
-      // If registration returns token/user (auto-login), handle it
+      // Backend sets tokens in HttpOnly cookies
+      // We only store user data locally
       const responseData = response.data as any;
-      if (responseData?.accessToken && responseData?.user) {
-        localStorage.setItem('access_token', responseData.accessToken);
-        if (responseData.refreshToken) {
-          localStorage.setItem('refresh_token', responseData.refreshToken);
-        }
+      if (responseData?.user) {
         setUser(responseData.user);
         localStorage.setItem('user', JSON.stringify(responseData.user));
         socketService.connect(responseData.user.id);
@@ -159,8 +148,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('Logout API call failed', e);
     }
 
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    // Backend clears cookies; we only need to clear local user data
     localStorage.removeItem('user');
     socketService.disconnect();
     setUser(null);
@@ -173,6 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     login,
     register,
     logout,
+    setAuthUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

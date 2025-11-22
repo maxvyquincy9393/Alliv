@@ -9,7 +9,7 @@ Provides utilities for:
 import logging
 from typing import Optional, List
 from motor.motor_asyncio import AsyncIOMotorClient
-from ..config_validated import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -17,7 +17,7 @@ export interface User {
   };
   githubUrl?: string;
   xHandle?: string;
-  portfolio?: string; 
+  portfolio?: string;
   // Social media - both formats for compatibility
   instagram?: string;
   telegram?: string;
@@ -44,6 +44,7 @@ export interface User {
   };
   email?: string;
   phone?: string;
+  trustScore?: number;
 }
 
 export interface AuthUser extends User {

@@ -11,7 +11,7 @@ import hashlib
 import logging
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
-from ..config_validated import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

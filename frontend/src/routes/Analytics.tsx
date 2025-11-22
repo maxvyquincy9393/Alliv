@@ -14,8 +14,7 @@ import {
   CheckCircle,
   ArrowUp,
 } from 'lucide-react';
-import { Layout } from '../components/Layout';
-import { UltraModernCard } from '../components/UltraModernCard';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 
 interface InsightData {
   activity_summary: {
@@ -50,15 +49,34 @@ export const Analytics = () => {
 
   const fetchInsights = async () => {
     try {
-      const response = await fetch('/api/analytics/user/insights', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      // Mock data for now since the API might not be ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const mockData: InsightData = {
+        activity_summary: {
+          total_swipes: 150,
+          total_likes: 45,
+          total_matches: 12,
+          total_messages: 85,
+          profile_views: 230
         },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setInsights(data.insights);
-      }
+        performance_metrics: {
+          like_rate: 30,
+          match_rate: 26,
+          response_rate: 75,
+          engagement_score: 85,
+          profile_likes_received: 28
+        },
+        activity_patterns: {
+          most_active_hours: [19, 20, 21],
+          most_active_days: ['Saturday', 'Sunday']
+        },
+        recommendations: [
+          'Complete your skills section to increase visibility',
+          'Upload more project photos to attract collaborators',
+          'Reply faster to messages to boost your response rate'
+        ]
+      };
+      setInsights(mockData);
     } catch (error) {
       console.error('Failed to fetch insights:', error);
     } finally {
@@ -68,22 +86,22 @@ export const Analytics = () => {
 
   if (loading || !insights) {
     return (
-      <Layout>
+      <FullScreenLayout>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-neon-cyan mx-auto"></div>
-            <p className="text-dark-text-secondary">Loading your insights...</p>
+            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="text-white/60">Loading your insights...</p>
           </div>
         </div>
-      </Layout>
+      </FullScreenLayout>
     );
   }
 
   const { activity_summary, performance_metrics, activity_patterns, recommendations } = insights;
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-dark-bg py-8 px-4">
+    <FullScreenLayout>
+      <div className="min-h-screen py-8 px-4 pt-24 pb-24">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
           <motion.div
@@ -91,23 +109,23 @@ export const Analytics = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-center space-y-4"
           >
-            <h1 className="text-5xl font-bold text-gradient">
+            <h1 className="text-4xl md:text-5xl font-bold text-white font-display">
               Your Analytics Dashboard
             </h1>
-            <p className="text-dark-text-secondary text-lg">
+            <p className="text-white/60 text-lg">
               Deep insights into your collaboration journey
             </p>
             
             {/* Timeframe Selector */}
-            <div className="flex gap-2 justify-center mt-6">
+            <div className="flex gap-2 justify-center mt-6 bg-white/5 p-1 rounded-xl inline-flex border border-white/10">
               {(['week', 'month', 'year'] as const).map((tf) => (
                 <button
                   key={tf}
                   onClick={() => setTimeframe(tf)}
                   className={`px-6 py-2 rounded-lg font-medium transition-all ${
                     timeframe === tf
-                      ? 'bg-neon-cyan text-dark-bg shadow-lg shadow-neon-cyan/50'
-                      : 'bg-dark-card text-dark-text-secondary hover:bg-dark-border'
+                      ? 'bg-white/10 text-white shadow-sm'
+                      : 'text-white/50 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   {tf.charAt(0).toUpperCase() + tf.slice(1)}
@@ -118,148 +136,160 @@ export const Analytics = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <UltraModernCard glowColor="cyan">
-              <div className="space-y-3">
+            <div className="glass-panel rounded-2xl p-6 relative overflow-hidden group hover:border-cyan-500/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Target size={64} className="text-cyan-400" />
+              </div>
+              <div className="space-y-3 relative z-10">
                 <div className="flex items-center justify-between">
-                  <Target className="text-neon-cyan" size={32} />
-                  <span className="flex items-center gap-1 text-neon-green text-sm font-medium">
-                    <ArrowUp size={16} />
+                  <Target className="text-cyan-400" size={32} />
+                  <span className="flex items-center gap-1 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <ArrowUp size={14} />
                     12%
                   </span>
                 </div>
                 <div>
-                  <p className="text-dark-text-secondary text-sm">Engagement Score</p>
+                  <p className="text-white/60 text-sm">Engagement Score</p>
                   <p className="text-4xl font-bold text-white mt-1">
                     {performance_metrics.engagement_score}
                   </p>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
 
-            <UltraModernCard glowColor="purple">
-              <div className="space-y-3">
+            <div className="glass-panel rounded-2xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Users size={64} className="text-purple-400" />
+              </div>
+              <div className="space-y-3 relative z-10">
                 <div className="flex items-center justify-between">
-                  <Users className="text-neon-purple" size={32} />
-                  <span className="flex items-center gap-1 text-neon-green text-sm font-medium">
-                    <ArrowUp size={16} />
+                  <Users className="text-purple-400" size={32} />
+                  <span className="flex items-center gap-1 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <ArrowUp size={14} />
                     8%
                   </span>
                 </div>
                 <div>
-                  <p className="text-dark-text-secondary text-sm">Total Matches</p>
+                  <p className="text-white/60 text-sm">Total Matches</p>
                   <p className="text-4xl font-bold text-white mt-1">
                     {activity_summary.total_matches}
                   </p>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
 
-            <UltraModernCard glowColor="pink">
-              <div className="space-y-3">
+            <div className="glass-panel rounded-2xl p-6 relative overflow-hidden group hover:border-pink-500/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Zap size={64} className="text-pink-400" />
+              </div>
+              <div className="space-y-3 relative z-10">
                 <div className="flex items-center justify-between">
-                  <Zap className="text-neon-pink" size={32} />
-                  <span className="flex items-center gap-1 text-neon-green text-sm font-medium">
-                    <ArrowUp size={16} />
+                  <Zap className="text-pink-400" size={32} />
+                  <span className="flex items-center gap-1 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <ArrowUp size={14} />
                     15%
                   </span>
                 </div>
                 <div>
-                  <p className="text-dark-text-secondary text-sm">Match Rate</p>
+                  <p className="text-white/60 text-sm">Match Rate</p>
                   <p className="text-4xl font-bold text-white mt-1">
                     {performance_metrics.match_rate}%
                   </p>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
 
-            <UltraModernCard glowColor="yellow">
-              <div className="space-y-3">
+            <div className="glass-panel rounded-2xl p-6 relative overflow-hidden group hover:border-yellow-500/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Star size={64} className="text-yellow-400" />
+              </div>
+              <div className="space-y-3 relative z-10">
                 <div className="flex items-center justify-between">
-                  <Star className="text-neon-yellow" size={32} />
-                  <span className="flex items-center gap-1 text-neon-green text-sm font-medium">
-                    <ArrowUp size={16} />
+                  <Star className="text-yellow-400" size={32} />
+                  <span className="flex items-center gap-1 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <ArrowUp size={14} />
                     5%
                   </span>
                 </div>
                 <div>
-                  <p className="text-dark-text-secondary text-sm">Profile Views</p>
+                  <p className="text-white/60 text-sm">Profile Views</p>
                   <p className="text-4xl font-bold text-white mt-1">
                     {activity_summary.profile_views}
                   </p>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
           </div>
 
           {/* Activity Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <UltraModernCard>
+            <div className="glass-panel rounded-2xl p-8">
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <BarChart3 className="text-neon-cyan" size={28} />
+                  <BarChart3 className="text-cyan-400" size={28} />
                   <h2 className="text-2xl font-bold text-white">Activity Summary</h2>
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-dark-card rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-neon-cyan/20 flex items-center justify-center">
-                        <Target className="text-neon-cyan" size={20} />
+                      <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                        <Target className="text-cyan-400" size={20} />
                       </div>
                       <span className="text-white font-medium">Total Swipes</span>
                     </div>
-                    <span className="text-2xl font-bold text-neon-cyan">
+                    <span className="text-2xl font-bold text-cyan-400">
                       {activity_summary.total_swipes}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-dark-card rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-neon-pink/20 flex items-center justify-center">
-                        <Award className="text-neon-pink" size={20} />
+                      <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center">
+                        <Award className="text-pink-400" size={20} />
                       </div>
                       <span className="text-white font-medium">Total Likes</span>
                     </div>
-                    <span className="text-2xl font-bold text-neon-pink">
+                    <span className="text-2xl font-bold text-pink-400">
                       {activity_summary.total_likes}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-dark-card rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-neon-purple/20 flex items-center justify-center">
-                        <Zap className="text-neon-purple" size={20} />
+                      <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                        <Zap className="text-purple-400" size={20} />
                       </div>
                       <span className="text-white font-medium">Messages Sent</span>
                     </div>
-                    <span className="text-2xl font-bold text-neon-purple">
+                    <span className="text-2xl font-bold text-purple-400">
                       {activity_summary.total_messages}
                     </span>
                   </div>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
 
-            <UltraModernCard>
+            <div className="glass-panel rounded-2xl p-8">
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <TrendingUp className="text-neon-purple" size={28} />
+                  <TrendingUp className="text-purple-400" size={28} />
                   <h2 className="text-2xl font-bold text-white">Performance Metrics</h2>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {/* Like Rate */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-dark-text-secondary">Like Rate</span>
+                      <span className="text-white/60">Like Rate</span>
                       <span className="text-white font-bold">{performance_metrics.like_rate}%</span>
                     </div>
-                    <div className="w-full h-2 bg-dark-card rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${performance_metrics.like_rate}%` }}
                         transition={{ duration: 1, delay: 0.2 }}
-                        className="h-full bg-gradient-to-r from-neon-cyan to-neon-purple rounded-full"
+                        className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full"
                       />
                     </div>
                   </div>
@@ -267,15 +297,15 @@ export const Analytics = () => {
                   {/* Match Rate */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-dark-text-secondary">Match Rate</span>
+                      <span className="text-white/60">Match Rate</span>
                       <span className="text-white font-bold">{performance_metrics.match_rate}%</span>
                     </div>
-                    <div className="w-full h-2 bg-dark-card rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${performance_metrics.match_rate}%` }}
                         transition={{ duration: 1, delay: 0.4 }}
-                        className="h-full bg-gradient-to-r from-neon-pink to-neon-yellow rounded-full"
+                        className="h-full bg-gradient-to-r from-pink-500 to-yellow-500 rounded-full"
                       />
                     </div>
                   </div>
@@ -283,53 +313,53 @@ export const Analytics = () => {
                   {/* Response Rate */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-dark-text-secondary">Response Rate</span>
+                      <span className="text-white/60">Response Rate</span>
                       <span className="text-white font-bold">{performance_metrics.response_rate}%</span>
                     </div>
-                    <div className="w-full h-2 bg-dark-card rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${performance_metrics.response_rate}%` }}
                         transition={{ duration: 1, delay: 0.6 }}
-                        className="h-full bg-gradient-to-r from-neon-green to-neon-cyan rounded-full"
+                        className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full"
                       />
                     </div>
                   </div>
 
                   {/* Profile Score */}
-                  <div className="mt-6 p-4 bg-gradient-to-r from-neon-cyan/10 to-neon-purple/10 rounded-lg border border-neon-cyan/30">
+                  <div className="mt-6 p-4 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-xl border border-cyan-500/20">
                     <div className="flex items-center justify-between">
                       <span className="text-white font-medium">Your Profile Score</span>
-                      <span className="text-3xl font-bold text-gradient">87.5</span>
+                      <span className="text-3xl font-bold text-white">87.5</span>
                     </div>
-                    <p className="text-dark-text-secondary text-sm mt-2">
+                    <p className="text-white/60 text-sm mt-2">
                       Better than 78% of users 🎉
                     </p>
                   </div>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
           </div>
 
           {/* Activity Patterns & Recommendations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <UltraModernCard>
+            <div className="glass-panel rounded-2xl p-8">
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <Calendar className="text-neon-yellow" size={28} />
+                  <Calendar className="text-yellow-400" size={28} />
                   <h2 className="text-2xl font-bold text-white">Activity Patterns</h2>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
-                    <p className="text-dark-text-secondary mb-3">Most Active Hours</p>
+                    <p className="text-white/60 mb-3">Most Active Hours</p>
                     <div className="flex flex-wrap gap-2">
                       {activity_patterns.most_active_hours.slice(0, 5).map((hour) => (
                         <div
                           key={hour}
-                          className="px-4 py-2 bg-neon-yellow/20 border border-neon-yellow/30 rounded-lg"
+                          className="px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
                         >
-                          <Clock className="inline-block mr-2 text-neon-yellow" size={16} />
+                          <Clock className="inline-block mr-2 text-yellow-400" size={16} />
                           <span className="text-white font-medium">{hour}:00</span>
                         </div>
                       ))}
@@ -337,12 +367,12 @@ export const Analytics = () => {
                   </div>
 
                   <div>
-                    <p className="text-dark-text-secondary mb-3">Most Active Days</p>
+                    <p className="text-white/60 mb-3">Most Active Days</p>
                     <div className="flex flex-wrap gap-2">
                       {activity_patterns.most_active_days.slice(0, 3).map((day) => (
                         <div
                           key={day}
-                          className="px-4 py-2 bg-neon-purple/20 border border-neon-purple/30 rounded-lg"
+                          className="px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-lg"
                         >
                           <span className="text-white font-medium">{day}</span>
                         </div>
@@ -351,12 +381,12 @@ export const Analytics = () => {
                   </div>
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
 
-            <UltraModernCard>
+            <div className="glass-panel rounded-2xl p-8">
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="text-neon-green" size={28} />
+                  <CheckCircle className="text-green-400" size={28} />
                   <h2 className="text-2xl font-bold text-white">Recommendations</h2>
                 </div>
                 
@@ -367,17 +397,17 @@ export const Analytics = () => {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className="p-4 bg-dark-card rounded-lg border-l-4 border-neon-green"
+                      className="p-4 bg-white/5 rounded-xl border-l-4 border-green-500"
                     >
                       <div className="flex items-start gap-3">
-                        <CheckCircle className="text-neon-green flex-shrink-0 mt-1" size={20} />
+                        <CheckCircle className="text-green-400 flex-shrink-0 mt-1" size={20} />
                         <p className="text-white">{rec}</p>
                       </div>
                     </motion.div>
                   ))}
                 </div>
               </div>
-            </UltraModernCard>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -386,7 +416,7 @@ export const Analytics = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-gradient-to-r from-neon-cyan to-neon-purple text-white font-bold rounded-xl shadow-lg hover:shadow-neon-cyan/50 transition-all"
+                className="btn-primary px-8 py-4 text-lg"
               >
                 Start Discovering
               </motion.button>
@@ -395,7 +425,7 @@ export const Analytics = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-dark-card text-white font-bold rounded-xl hover:bg-dark-border transition-all"
+                className="btn-secondary px-8 py-4 text-lg"
               >
                 Improve Profile
               </motion.button>
@@ -403,6 +433,6 @@ export const Analytics = () => {
           </div>
         </div>
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };

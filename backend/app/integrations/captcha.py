@@ -6,7 +6,7 @@ Supports reCAPTCHA v3 for invisible bot detection.
 import logging
 from typing import Optional
 import httpx
-from ..config_validated import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

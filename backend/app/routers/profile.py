@@ -13,6 +13,7 @@ import re
 
 from ..db import get_db
 from ..auth import get_current_user
+from ..services.trust import update_user_trust_score
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -253,6 +254,9 @@ async def update_current_profile(
                 {"$set": {"name": data.name.strip()}}
             )
         
+        # Update trust score
+        await update_user_trust_score(user_id)
+        
         # Return updated profile
         profile = await get_db().profiles.find_one({"userId": user_id})
         if profile:
@@ -325,6 +329,9 @@ async def update_photos(
             # No changes made (same photos)
             logger.info(f"[WARN] No changes made to photos for user {user_id}")
         
+        # Update trust score
+        await update_user_trust_score(user_id)
+
         return {"message": "Photos updated", "photos": data.photos}
         
     except HTTPException:

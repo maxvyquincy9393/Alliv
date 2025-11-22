@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import api from '../services/api';
 
 export interface SocketMessage {
   _id: string;
@@ -38,33 +39,39 @@ export const useSocket = (matchId: string | null): UseSocketReturn => {
   const [typing, setTyping] = useState(false);
   const [online, setOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const typingTimeoutRef = useRef<TimeoutHandle>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setMessages([]);
     setOnline(false);
     setTyping(false);
 
-    if (!matchId) {
-      return;
-    }
+    const bootstrap = async () => {
+      if (!matchId) return;
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setError('Authentication required');
-      return;
-    }
+      try {
+        // Get a fresh access token via cookie-based refresh
+        const refresh = await api.auth.refreshToken();
+        const access = refresh.data?.access_token || null;
+        if (!access) {
+          setError('Authentication required');
+          return;
+        }
+        if (cancelled) return;
+        setToken(access);
 
-    const newSocket = io(SOCKET_URL, {
-      auth: { token },
-      transports: ['websocket'],
-      withCredentials: true,
-      secure: SOCKET_SECURE,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-    });
+        const newSocket = io(SOCKET_URL, {
+          auth: { token: access },
+          transports: ['websocket'],
+          withCredentials: true,
+          secure: SOCKET_SECURE,
+          reconnection: true,
+          reconnectionDelay: 1000,
+          reconnectionAttempts: 5,
+        });
 
     newSocket.on('connect', () => {
       console.info('[socket] connected', newSocket.id);
@@ -135,13 +142,30 @@ export const useSocket = (matchId: string | null): UseSocketReturn => {
       setError(data.message || 'Unexpected Socket.IO error');
     });
 
-    setSocket(newSocket);
+        setSocket(newSocket);
+
+        return () => {
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+          }
+          newSocket.disconnect();
+        };
+      } catch (err: any) {
+        console.error('[socket] token fetch failed', err);
+        setError('Authentication required');
+      }
+    };
+
+    const cleanup = bootstrap();
 
     return () => {
+      cancelled = true;
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      newSocket.disconnect();
+      if (typeof cleanup === 'function') {
+        cleanup();
+      }
     };
   }, [matchId]);
 

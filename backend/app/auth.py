@@ -1,4 +1,7 @@
-from fastapi import Depends, HTTPException, status
+import logging
+import hmac
+import hashlib
+from fastapi import Depends, HTTPException, status, Cookie
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
@@ -7,6 +10,9 @@ from bson import ObjectId
 from .config import settings
 from .db import users
 from .password_utils import hash_password, verify_password
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
@@ -33,6 +39,15 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 
+def hash_refresh_token(token: str) -> str:
+    """Hash refresh token for secure storage using HMAC and pepper"""
+    return hmac.new(
+        settings.REFRESH_TOKEN_FINGERPRINT_PEPPER.encode(),
+        token.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+
 def verify_access_token(token: str) -> Optional[dict]:
     """Verify and decode access token"""
     try:
@@ -53,7 +68,10 @@ def verify_refresh_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
+async def get_current_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    access_token: Optional[str] = Cookie(None)
+):
     """Dependency to get current authenticated user"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,24 +79,28 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    # Prefer header token, fall back to cookie
+    if not token and access_token:
+        token = access_token
+    
     if not token:
         raise credentials_exception
     
     token = token.strip()
     
-    # Allow plain ObjectId tokens in non-production environments for testing
-    if settings.NODE_ENV != "production" and ObjectId.is_valid(token):
-        return await _fetch_user_by_id(token, credentials_exception)
+    # Strict JWT validation only - no ObjectId bypass
+    # if settings.NODE_ENV == "test" and ObjectId.is_valid(token):
+    #     return await _fetch_user_by_id(token, credentials_exception)
     
     try:
         payload = jwt.decode(token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
-        print(f"[SEARCH] DEBUG - Token decoded successfully, user_id: {user_id}")
+        # logger.debug(f"[SEARCH] Token decoded successfully, user_id: {user_id}")
         if user_id is None:
-            print("[ERROR] DEBUG - user_id is None in token payload")
+            logger.error("[ERROR] user_id is None in token payload")
             raise credentials_exception
     except JWTError as e:
-        print(f"[ERROR] DEBUG - JWT decode failed: {str(e)}")
+        logger.error(f"[ERROR] JWT decode failed: {str(e)}")
         raise credentials_exception
     
     return await _fetch_user_by_id(user_id, credentials_exception)
@@ -92,9 +114,9 @@ async def _fetch_user_by_id(user_id: str, credentials_exception: HTTPException):
         raise credentials_exception
     
     user = await users().find_one({"_id": user_object_id})
-    print(f"[SEARCH] DEBUG - Database lookup for user_id {user_id}: {'Found' if user else 'Not found'}")
+    # logger.debug(f"[SEARCH] Database lookup for user_id {user_id}: {'Found' if user else 'Not found'}")
     if user is None:
-        print(f"[ERROR] DEBUG - User {user_id} not found in database")
+        logger.error(f"[ERROR] User {user_id} not found in database")
         raise credentials_exception
     
     await users().update_one(

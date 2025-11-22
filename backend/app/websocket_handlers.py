@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, Set
 import logging
 
-from . import db
+from .db import users, matches, messages
 from .auth import decode_token
 
 # Setup logging
@@ -57,7 +57,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             
             # Get user from database
             try:
-                user = await db.users.find_one({"_id": ObjectId(user_id)})
+                user = await users().find_one({"_id": ObjectId(user_id)})
                 if not user:
                     logger.warning(f"[ERROR] Connection rejected: User not found {user_id}")
                     await sio.disconnect(sid)
@@ -147,7 +147,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
             
             # Verify user is part of this match
             try:
-                match = await db.matches.find_one({"_id": ObjectId(match_id)})
+                match = await matches().find_one({"_id": ObjectId(match_id)})
                 if not match:
                     await sio.emit('error', {'message': 'Match not found'}, room=sid)
                     return
@@ -214,7 +214,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 return
             
             # Get user info
-            user = await db.users.find_one({"_id": ObjectId(user_id)})
+            user = await users().find_one({"_id": ObjectId(user_id)})
             if not user:
                 await sio.emit('error', {'message': 'User not found'}, room=sid)
                 return
@@ -233,7 +233,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 "readAt": None
             }
             
-            result = await db.messages.insert_one(message_doc)
+            result = await messages().insert_one(message_doc)
             message_id = str(result.inserted_id)
             
             logger.info(f"[OK] Message sent: {user_id} -> {match_id}")
@@ -331,7 +331,7 @@ def register_socket_handlers(sio: socketio.AsyncServer):
                 return
             
             # Update message readAt timestamp
-            result = await db.messages.update_one(
+            result = await messages().update_one(
                 {
                     "_id": ObjectId(message_id),
                     "matchId": ObjectId(match_id),
@@ -366,7 +366,7 @@ async def broadcast_online_status(sio: socketio.AsyncServer, user_id: str, onlin
     try:
         # Get all matches for this user
         user_oid = ObjectId(user_id)
-        matches = await db.matches.find({
+        matches_list = await matches().find({
             "$or": [
                 {"user1": user_oid},
                 {"user2": user_oid}
@@ -374,7 +374,7 @@ async def broadcast_online_status(sio: socketio.AsyncServer, user_id: str, onlin
         }).to_list(length=100)
         
         # Broadcast to each match
-        for match in matches:
+        for match in matches_list:
             match_id = str(match['_id'])
             await sio.emit('user_online_status', {
                 'user_id': user_id,

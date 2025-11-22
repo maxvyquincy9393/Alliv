@@ -141,8 +141,7 @@ export const Home = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={loadUsers}
-              className="px-8 py-4 rounded-full bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] text-black font-bold shadow-lg hover:shadow-xl transition-all"
-              style={{ boxShadow: `0 15px 35px ${theme.colors.primary.blue}40` }}
+              className="btn-primary px-8 py-4 rounded-full"
             >
               Refresh Feed
             </motion.button>
@@ -260,8 +259,7 @@ export const Home = () => {
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => handleSwipeAction('right')}
-                className="rounded-full bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] px-8 py-3 text-sm font-semibold text-black shadow-lg hover:shadow-xl transition-all"
-                style={{ boxShadow: `0 15px 30px ${theme.colors.primary.blue}40` }}
+                className="btn-primary px-8 py-3 rounded-full"
               >
                 Send a quick hello
               </motion.button>

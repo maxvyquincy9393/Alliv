@@ -341,16 +341,13 @@ async def test_auth_flow(test_client):
     assert login_response.status_code == 200
     login_data = login_response.json()
     assert "accessToken" in login_data
-    assert "refreshToken" in login_data
+    assert "refreshToken" not in login_data
     
     # Refresh token
-    refresh_response = await test_client.post(
-        "/auth/refresh",
-        json={"refreshToken": login_data["refreshToken"]}
-    )
+    refresh_response = await test_client.post("/auth/refresh")
     assert refresh_response.status_code == 200
     refresh_data = refresh_response.json()
-    assert "accessToken" in refresh_data
+    assert "access_token" in refresh_data
 
 
 # Summary

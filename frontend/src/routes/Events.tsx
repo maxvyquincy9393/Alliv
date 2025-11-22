@@ -1,242 +1,305 @@
 import { useState, useEffect } from 'react';
-import type { ComponentType } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FullScreenLayout } from '../components/FullScreenLayout';
-import { GlassButton } from '../components/GlassButton';
 import { useAuth } from '../hooks/useAuth';
-import { scaleIn } from '../lib/motion';
-import type { Event, EventCategory } from '../types/event';
 import {
-  Camera,
-  Music3,
-  Cpu,
-  Users,
-  Sparkles,
-  Palette,
-  Wifi,
   Calendar,
-  Clock,
   MapPin,
+  Clock,
+  Users,
+  Plus,
+  Search,
+  Filter,
+  Wifi,
+  Share2,
+  Bookmark
 } from 'lucide-react';
+import type { Event, EventCategory } from '../types/event';
 
-const categoryMeta: Partial<
-  Record<EventCategory, { label: string; icon: ComponentType<{ className?: string }> }>
-> = {
-  photowalk: { label: 'Photo Walk', icon: Camera },
-  'photography-walk': { label: 'Photo Walk', icon: Camera },
-  jamsession: { label: 'Jam Session', icon: Music3 },
-  'jam-session': { label: 'Jam Session', icon: Music3 },
-  hackathon: { label: 'Hackathon', icon: Cpu },
-  hacknight: { label: 'Hack Night', icon: Cpu },
-  meetup: { label: 'Meetup', icon: Users },
-  networking: { label: 'Networking', icon: Users },
-  workshop: { label: 'Workshop', icon: Palette },
-  'design-sprint': { label: 'Design Sprint', icon: Palette },
-  collaboration: { label: 'Collaboration', icon: Sparkles },
-};
+// Extended Event type for the mock data with images
+interface ExtendedEvent extends Event {
+  coverImage: string;
+}
 
 export const Events = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<ExtendedEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<EventCategory | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-    loadEvents();
+    fetchEvents();
   }, [isAuthenticated, navigate]);
 
-  const loadEvents = () => {
-    const mockEvents: Event[] = [
-      {
-        id: '1',
-        title: 'Sunday Photo Walk: Old Town',
-        description:
-          'Join us for a relaxed photo walk through the historic old town. All skill levels welcome!',
-        organizerId: 'u1',
-        organizerName: 'Lisa Wang',
-        organizerAvatar: 'https://i.pravatar.cc/150?img=9',
-        category: 'photowalk',
-        startsAt: '2025-11-10T09:00:00',
-        venueCity: 'Jakarta',
-        tags: ['photography', 'outdoor'],
-        field: 'photography',
-        maxAttendees: 15,
-        attendees: [],
-        rsvps: [],
-        isOnline: false,
-        status: 'upcoming',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        title: 'Jazz Jam Session',
-        description:
-          'Bring your instrument and join our weekly jam session. Improvise, collaborate, and have fun!',
-        organizerId: 'u2',
-        organizerName: 'David Park',
-        organizerAvatar: 'https://i.pravatar.cc/150?img=11',
-        category: 'jamsession',
-        startsAt: '2025-11-08T19:00:00',
-        venueCity: 'Tokyo',
-        tags: ['music', 'jazz'],
-        field: 'music',
-        maxAttendees: 20,
-        attendees: [],
-        rsvps: [],
-        isOnline: false,
-        status: 'upcoming',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: '3',
-        title: '48-Hour Hackathon: AI for Good',
-        description:
-          'Build AI solutions for social impact. Teams will be formed on day 1. Prizes for top 3 projects!',
-        organizerId: 'u3',
-        organizerName: 'Emma Chen',
-        organizerAvatar: 'https://i.pravatar.cc/150?img=6',
-        category: 'hackathon',
-        startsAt: '2025-11-15T18:00:00',
-        venueCity: 'Online',
-        tags: ['tech', 'ai', 'coding'],
-        field: 'technology',
-        maxAttendees: 50,
-        attendees: [],
-        rsvps: [],
-        isOnline: true,
-        status: 'upcoming',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    setEvents(mockEvents);
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const mockEvents: ExtendedEvent[] = [
+        {
+          id: '1',
+          title: 'Tech Founders Mixer',
+          description: 'Exclusive networking event for tech founders in Jakarta. Connect with investors and peers in a premium setting.',
+          organizerId: 'u1',
+          organizerName: 'Startup Grind',
+          organizerAvatar: 'https://i.pravatar.cc/150?img=12',
+          category: 'networking',
+          startsAt: '2025-11-20T18:00:00',
+          venueCity: 'Jakarta',
+          tags: ['Startup', 'Networking', 'Business'],
+          field: 'Business',
+          maxAttendees: 100,
+          attendees: [],
+          rsvps: [],
+          isOnline: false,
+          status: 'upcoming',
+          createdAt: new Date().toISOString(),
+          coverImage: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&q=80&w=1000',
+        },
+        {
+          id: '2',
+          title: 'React Advanced Workshop',
+          description: 'Deep dive into React Server Components, performance optimization, and modern patterns.',
+          organizerId: 'u2',
+          organizerName: 'ReactID',
+          organizerAvatar: 'https://i.pravatar.cc/150?img=8',
+          category: 'workshop',
+          startsAt: '2025-11-22T10:00:00',
+          venueCity: 'Online',
+          tags: ['React', 'Frontend', 'Web'],
+          field: 'Technology',
+          maxAttendees: 500,
+          attendees: [],
+          rsvps: [],
+          isOnline: true,
+          status: 'upcoming',
+          createdAt: new Date().toISOString(),
+          coverImage: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&q=80&w=1000',
+        },
+        {
+          id: '3',
+          title: 'Design Systems Hackathon',
+          description: '48-hour hackathon to build the next generation of design tools. Prizes worth $5k.',
+          organizerId: 'u3',
+          organizerName: 'Figma Community',
+          organizerAvatar: 'https://i.pravatar.cc/150?img=5',
+          category: 'hackathon',
+          startsAt: '2025-11-25T09:00:00',
+          venueCity: 'Singapore',
+          tags: ['Design', 'Hackathon', 'UI/UX'],
+          field: 'Design',
+          maxAttendees: 50,
+          attendees: [],
+          rsvps: [],
+          isOnline: false,
+          status: 'upcoming',
+          createdAt: new Date().toISOString(),
+          coverImage: 'https://images.unsplash.com/photo-1504384308090-c54be3855833?auto=format&fit=crop&q=80&w=1000',
+        }
+      ];
+      setEvents(mockEvents);
+    } catch (err) {
+      setError('Failed to load events. Please try again later.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRSVP = (eventId: string) => {
-    console.log('RSVP to event:', eventId);
-    alert('RSVP confirmed! Check your messages for the event group chat.');
-  };
-
-  const filteredEvents = events.filter((event) => (filter === 'all' ? true : event.category === filter));
+  const filteredEvents = events.filter(e =>
+    (filter === 'all' || e.category === filter) &&
+    (e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
     <FullScreenLayout>
-      <div className="shell-content space-y-6 pb-12">
-        <section className="panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1.5">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Events</p>
-            <h1 className="text-3xl font-semibold text-white">Meet collaborators in real time.</h1>
-            <p className="text-white/60 text-sm mt-2">
-              Walks, jam sessions, hackathons, and more curated meets for the Alliv community.
+      <div className="min-h-screen text-slate-200 p-6 md:p-10 md:pl-80 pt-24">
+
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div className="space-y-2">
+            <h1 className="text-5xl font-bold font-display tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500">
+              Explore Events
+            </h1>
+            <p className="text-lg text-slate-400 max-w-xl">
+              Discover workshops, meetups, and hackathons to level up your skills and network.
             </p>
           </div>
-          <GlassButton variant="primary" onClick={() => navigate('/events/create')}>
-            + Create event
-          </GlassButton>
-        </section>
+          <button
+            onClick={() => navigate('/events/create')}
+            className="btn-primary flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold group"
+          >
+            <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+            Create Event
+          </button>
+        </div>
 
-        <section className="panel flex flex-wrap gap-2 p-4">
-          {(['all', ...(Object.keys(categoryMeta) as EventCategory[])] as (EventCategory | 'all')[]).map(
-            (cat) => (
+        {/* Search & Filter Bar */}
+        <div className="glass-panel rounded-3xl p-2 mb-10 flex flex-col md:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search for events..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-transparent border-none rounded-2xl pl-14 pr-4 py-4 text-white placeholder:text-slate-500 focus:ring-0 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex gap-1 overflow-x-auto p-1 scrollbar-hide">
+            {(['all', 'workshop', 'meetup', 'hackathon', 'networking'] as const).map((cat) => (
               <button
                 key={cat}
-                onClick={() => setFilter(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  filter === cat
-                    ? 'bg-white text-black shadow-[0_4px_16px_rgba(255,255,255,0.3)]'
-                    : 'bg-white/8 text-white/70 hover:text-white hover:bg-white/12 shadow-[0_2px_8px_rgba(0,0,0,0.25)]'
-                }`}
+                onClick={() => setFilter(cat as any)}
+                className={`px-6 py-3 rounded-xl text-sm font-medium capitalize whitespace-nowrap transition-all duration-300 ${filter === cat
+                  ? 'bg-blue-500/20 text-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.3)] border border-blue-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
               >
-                {cat === 'all' ? 'All events' : categoryMeta[cat]?.label || cat}
+                {cat}
               </button>
-            )
-          )}
-        </section>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event, index) => {
-            const key: EventCategory = event.category ?? 'collaboration';
-            const meta = categoryMeta[key];
-            const Icon = meta?.icon || Sparkles;
-
-            return (
-              <motion.div
-                key={event.id}
-                variants={scaleIn}
-                custom={index}
-                initial="hidden"
-                whileInView="show"
-                viewport={{ once: true }}
-                className="panel flex h-full flex-col gap-4 p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1 text-xs text-white/70 shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-                    <Icon className="w-3.5 h-3.5" />
-                    {meta?.label || key}
-                  </div>
-                  {event.isOnline && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-accent-blue/15 px-3 py-1 text-xs text-accent-blue shadow-[0_2px_8px_rgba(8,189,255,0.25)]">
-                      <Wifi className="w-3.5 h-3.5" />
-                      Online
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="text-xl font-semibold text-white">{event.title}</h3>
-                  <p className="text-sm text-white/60 line-clamp-3">{event.description}</p>
-                </div>
-
-                <div className="space-y-1.5 text-sm text-white/70">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-white/40" />
-                    {new Date(event.startsAt).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-white/40" />
-                    {new Date(event.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-white/40" />
-                    {event.venueCity}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <img
-                    src={event.organizerAvatar}
-                    alt={event.organizerName}
-                    className="w-10 h-10 rounded-full object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                  />
-                  <div>
-                    <p className="text-sm text-white font-semibold">{event.organizerName}</p>
-                    <p className="text-xs text-white/50">Organizer</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {event.tags?.map((tag) => (
-                    <span key={tag} className="text-xs rounded-full bg-white/8 px-3 py-1 text-white/70 shadow-[0_2px_6px_rgba(0,0,0,0.2)]">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => handleRSVP(event.id)}
-                  className="w-full rounded-2xl bg-white/8 px-4 py-2 text-sm font-medium text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:bg-white/12 hover:shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-all"
-                >
-                  RSVP
-                </button>
-              </motion.div>
-            );
-          })}
+            ))}
+          </div>
         </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-2xl mb-8 flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            {error}
+          </div>
+        )}
+
+        {/* Content Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-[400px] bg-white/5 rounded-3xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <AnimatePresence mode="popLayout">
+              {filteredEvents.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {!loading && filteredEvents.length === 0 && (
+          <div className="text-center py-32">
+            <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10">
+              <Calendar className="text-slate-600" size={40} />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2 font-display">No events found</h3>
+            <p className="text-slate-400">Try adjusting your search or filters to find what you're looking for.</p>
+          </div>
+        )}
       </div>
     </FullScreenLayout>
+  );
+};
+
+const EventCard = ({ event }: { event: ExtendedEvent }) => {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      className="group relative glass-panel rounded-3xl overflow-hidden hover:border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-500 flex flex-col"
+    >
+      {/* Image Section */}
+      <div className="relative h-48 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-transparent z-10" />
+        <img
+          src={event.coverImage}
+          alt={event.title}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+        />
+
+        {/* Date Badge */}
+        <div className="absolute top-4 left-4 z-20 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl p-3 text-center min-w-[70px]">
+          <div className="text-xs font-medium text-blue-400 uppercase tracking-wider">
+            {new Date(event.startsAt).toLocaleDateString('en-US', { month: 'short' })}
+          </div>
+          <div className="text-xl font-bold text-white font-display">
+            {new Date(event.startsAt).getDate()}
+          </div>
+        </div>
+
+        {/* Category Badge */}
+        <div className="absolute top-4 right-4 z-20">
+          <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 backdrop-blur-md capitalize">
+            {event.category}
+          </span>
+        </div>
+      </div>
+
+      {/* Content Section */}
+      <div className="p-6 flex-1 flex flex-col">
+        <div className="flex justify-between items-start mb-3">
+          {event.isOnline && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+              <Wifi size={12} /> ONLINE
+            </span>
+          )}
+        </div>
+
+        <h3 className="text-2xl font-bold text-white mb-3 font-display leading-tight group-hover:text-blue-400 transition-colors">
+          {event.title}
+        </h3>
+
+        <p className="text-slate-400 text-sm line-clamp-2 mb-6 leading-relaxed">
+          {event.description}
+        </p>
+
+        <div className="mt-auto space-y-3">
+          <div className="flex items-center gap-3 text-sm text-slate-300">
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-blue-400">
+              <Clock size={14} />
+            </div>
+            <span>{new Date(event.startsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+          </div>
+
+          <div className="flex items-center gap-3 text-sm text-slate-300">
+            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-blue-400">
+              <MapPin size={14} />
+            </div>
+            <span className="truncate">{event.venueCity}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Section */}
+      <div className="p-4 border-t border-white/5 bg-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <img src={event.organizerAvatar} alt={event.organizerName} className="w-8 h-8 rounded-full border border-slate-600" />
+          <span className="text-sm text-slate-300 font-medium">{event.organizerName}</span>
+        </div>
+
+        <div className="flex gap-2">
+          <button className="p-2.5 hover:bg-blue-500/20 rounded-xl text-slate-400 hover:text-blue-400 transition-all">
+            <Bookmark size={18} />
+          </button>
+          <button className="p-2.5 hover:bg-blue-500/20 rounded-xl text-slate-400 hover:text-blue-400 transition-all">
+            <Share2 size={18} />
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 };

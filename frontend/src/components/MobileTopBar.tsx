@@ -1,12 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Menu, X, Home, Briefcase, Calendar, Settings, LogOut } from 'lucide-react';
 import { useState } from 'react';
+import { Logo } from './Logo';
 
 export const MobileTopBar = () => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  
+
   // Don't show on landing/login/register pages
   const hiddenPaths = ['/', '/login', '/register'];
   if (hiddenPaths.some(path => location.pathname === path)) {
@@ -15,72 +16,64 @@ export const MobileTopBar = () => {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[rgb(var(--color-bg-soft)/0.95)] backdrop-blur-lg border-b border-white/10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/home">
-            <motion.div
-              className="text-xl font-bold"
-              style={{
-                background: 'linear-gradient(135deg, #BDB4FF 0%, #6EE6FF 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                filter: 'drop-shadow(0 0 8px rgba(189, 180, 255, 0.12))'
-              }}
-            >
-              Alliv
-            </motion.div>
+      <div className="md:hidden fixed top-4 left-4 right-4 z-50 flex justify-center pointer-events-none">
+        <div className="pointer-events-auto flex items-center justify-between w-full max-w-sm bg-[#0b0b0f]/80 backdrop-blur-xl border border-white/10 rounded-full px-4 py-2 shadow-glow-blue">
+          <Link to="/home" className="flex items-center">
+            <Logo size="small" />
           </Link>
-          
+
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 text-white/60 hover:text-white"
+            className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-colors border border-white/5"
           >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
       </div>
 
       {/* Menu Overlay */}
-      {menuOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="md:hidden fixed inset-0 z-40 bg-[rgb(var(--color-bg)/0.95)] backdrop-blur-lg pt-16"
-          onClick={() => setMenuOpen(false)}
-        >
-          <div className="p-6 space-y-4">
-            <Link 
-              to="/projects" 
-              className="block text-lg text-white/80 hover:text-white py-2"
-              onClick={() => setMenuOpen(false)}
-            >
-              Projects
-            </Link>
-            <Link 
-              to="/events" 
-              className="block text-lg text-white/80 hover:text-white py-2"
-              onClick={() => setMenuOpen(false)}
-            >
-              Events
-            </Link>
-            <Link 
-              to="/settings" 
-              className="block text-lg text-white/80 hover:text-white py-2"
-              onClick={() => setMenuOpen(false)}
-            >
-              Settings
-            </Link>
-            <Link 
-              to="/logout" 
-              className="block text-lg text-red-400 hover:text-red-300 py-2"
-              onClick={() => setMenuOpen(false)}
-            >
-              Logout
-            </Link>
-          </div>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden fixed top-20 left-4 right-4 z-40 bg-[#0b0b0f]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+          >
+            <div className="p-2 space-y-1">
+              <MenuLink to="/home" icon={Home} label="Home" onClick={() => setMenuOpen(false)} />
+              <MenuLink to="/projects" icon={Briefcase} label="Projects" onClick={() => setMenuOpen(false)} />
+              <MenuLink to="/events" icon={Calendar} label="Events" onClick={() => setMenuOpen(false)} />
+              <div className="h-px bg-white/5 my-2 mx-2" />
+              <MenuLink to="/settings" icon={Settings} label="Settings" onClick={() => setMenuOpen(false)} />
+              <MenuLink to="/logout" icon={LogOut} label="Logout" onClick={() => setMenuOpen(false)} variant="danger" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 };
+
+interface MenuLinkProps {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  variant?: 'default' | 'danger';
+}
+
+const MenuLink = ({ to, icon: Icon, label, onClick, variant = 'default' }: MenuLinkProps) => (
+  <Link
+    to={to}
+    onClick={onClick}
+    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${variant === 'danger'
+        ? 'text-red-400 hover:bg-red-500/10'
+        : 'text-white/70 hover:text-white hover:bg-white/5'
+      }`}
+  >
+    <Icon size={18} />
+    <span className="font-medium text-sm">{label}</span>
+  </Link>
+);

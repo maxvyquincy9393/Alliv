@@ -29,7 +29,7 @@ def init_sentry(
     Usage:
         # In main.py
         from app.integrations.sentry import init_sentry
-        from app.config_validated import settings
+        from app.config import settings
         
         if settings.SENTRY_DSN:
             init_sentry(

@@ -21,7 +21,7 @@ export const FullScreenLayout = ({
     <div className="min-h-screen bg-gradient-to-br from-[#0A0F1C] via-[#1A1F3A] to-[#0D1117] text-white overflow-hidden">
       {/* Animated background effects */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(120,119,198,0.1),_transparent_40%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.1),_transparent_40%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_rgba(53,245,255,0.05),_transparent_40%)]" />
       </div>
 

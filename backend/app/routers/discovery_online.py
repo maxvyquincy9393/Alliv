@@ -1,6 +1,6 @@
 """
 Discovery Online Router - Find compatible online users
-Production-ready endpoint with compatibility scoring
+Production-ready endpoint with AI-powered compatibility scoring
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List, Optional, Dict, Any
@@ -11,6 +11,8 @@ import logging
 
 from ..auth import get_current_user, oauth2_scheme
 from .. import db
+from ..services import get_matching_service
+from ..config import settings
 
 router = APIRouter(prefix="/discover", tags=["Discovery"])
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ===== RESPONSE MODELS =====
 
 class OnlineUserResponse(BaseModel):
-    """Single online user with compatibility score"""
+    """Single online user with AI-powered compatibility score"""
     id: str
     name: str
     age: int
@@ -31,7 +33,10 @@ class OnlineUserResponse(BaseModel):
     location: Dict[str, Any]
     isOnline: bool
     lastSeen: datetime
-    compatibility: int = Field(..., ge=0, le=100, description="Compatibility percentage")
+    compatibility: int = Field(..., ge=0, le=100, description="AI-powered compatibility %")
+    match_breakdown: Optional[Dict[str, float]] = None
+    match_reasons: Optional[List[str]] = None
+    conversation_starters: Optional[List[str]] = None
     
     class Config:
         json_schema_extra = {
@@ -47,7 +52,8 @@ class OnlineUserResponse(BaseModel):
                 "location": {"lat": -6.2088, "lon": 106.8456, "city": "Jakarta"},
                 "isOnline": True,
                 "lastSeen": "2025-11-03T10:30:00Z",
-                "compatibility": 85
+                "compatibility": 85,
+                "match_reasons": ["✅ Shared skills: Photography, Editing", "💡 Common interests: Travel, Art"]
             }
         }
 
@@ -57,28 +63,15 @@ class OnlineUsersResponse(BaseModel):
     users: List[OnlineUserResponse]
     count: int
     field_filter: Optional[str] = None
+    ai_powered: bool = Field(default=True, description="Whether AI matching is enabled")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "users": [
-                    {
-                        "id": "507f1f77bcf86cd799439011",
-                        "name": "Sarah Chen",
-                        "age": 28,
-                        "field": "Photography",
-                        "avatar": "https://example.com/avatar.jpg",
-                        "skills": ["Portrait", "Editing"],
-                        "interests": ["Travel", "Art"],
-                        "bio": "Passionate photographer",
-                        "location": {"lat": -6.2088, "lon": 106.8456, "city": "Jakarta"},
-                        "isOnline": True,
-                        "lastSeen": "2025-11-03T10:30:00Z",
-                        "compatibility": 85
-                    }
-                ],
-                "count": 1,
-                "field_filter": "Photography"
+                "users": [...],
+                "count": 10,
+                "field_filter": "Photography",
+                "ai_powered": True
             }
         }
 
@@ -99,79 +92,23 @@ async def _get_current_user_dependency(
         )
 
 
-# ===== COMPATIBILITY CALCULATION =====
-
-def calculate_compatibility(
-    current_user: dict,
-    target_user: dict
-) -> int:
+def format_user_response(
+    user: dict, 
+    match_result: Any,  # MatchResult from matching_service
+    include_details: bool = False
+) -> OnlineUserResponse:
     """
-    Calculate compatibility score between two users
-    
-    Scoring breakdown:
-    - Common skills: 40% (max 40 points)
-    - Common interests: 40% (max 40 points)
-    - Field match: 20% (max 20 points)
-    
-    Args:
-        current_user: Current authenticated user dict
-        target_user: Target user to calculate compatibility with
-        
-    Returns:
-        int: Compatibility score (0-100)
-    """
-    try:
-        score = 0
-        
-        # Get user data with safe defaults
-        current_skills = set(current_user.get('skills', []))
-        target_skills = set(target_user.get('skills', []))
-        current_interests = set(current_user.get('interests', []))
-        target_interests = set(target_user.get('interests', []))
-        current_field = current_user.get('field', '').lower().strip()
-        target_field = target_user.get('field', '').lower().strip()
-        
-        # 1. SKILLS COMPATIBILITY (40%)
-        if current_skills and target_skills:
-            common_skills = current_skills.intersection(target_skills)
-            total_skills = current_skills.union(target_skills)
-            skills_ratio = len(common_skills) / len(total_skills)
-            score += int(skills_ratio * 40)
-        
-        # 2. INTERESTS COMPATIBILITY (40%)
-        if current_interests and target_interests:
-            common_interests = current_interests.intersection(target_interests)
-            total_interests = current_interests.union(target_interests)
-            interests_ratio = len(common_interests) / len(total_interests)
-            score += int(interests_ratio * 40)
-        
-        # 3. FIELD MATCH (20%)
-        if current_field and target_field:
-            if current_field == target_field:
-                score += 20  # Perfect field match
-            elif current_field in target_field or target_field in current_field:
-                score += 10  # Partial field match
-        
-        # Ensure score is within 0-100 range
-        return max(0, min(100, score))
-        
-    except Exception as e:
-        logger.error(f"[ERROR] Compatibility calculation error: {e}")
-        return 0  # Return 0 on error, don't crash
-
-
-def format_user_response(user: dict, compatibility: int) -> OnlineUserResponse:
-    """
-    Format MongoDB user document to OnlineUserResponse
+    Format MongoDB user document to OnlineUserResponse with AI match data
     
     Args:
         user: MongoDB user document
-        compatibility: Calculated compatibility score
+        match_result: MatchResult from matching service
+        include_details: Whether to include breakdown and conversation starters
         
     Returns:
-        OnlineUserResponse: Formatted user with compatibility
+        OnlineUserResponse: Formatted user with AI compatibility
     """
-    return OnlineUserResponse(
+    response = OnlineUserResponse(
         id=str(user['_id']),
         name=user.get('name', ''),
         age=user.get('age', 0),
@@ -183,8 +120,16 @@ def format_user_response(user: dict, compatibility: int) -> OnlineUserResponse:
         location=user.get('location', {}),
         isOnline=user.get('isOnline', False),
         lastSeen=user.get('lastSeen', datetime.utcnow()),
-        compatibility=compatibility
+        compatibility=match_result.score,
+        match_reasons=match_result.reasons if include_details else None
     )
+    
+    # Only include detailed breakdown for high matches
+    if include_details and match_result.score >= 60:
+        response.match_breakdown = match_result.breakdown
+        response.conversation_starters = match_result.conversation_starters
+    
+    return response
 
 
 # ===== MAIN ENDPOINT =====
@@ -193,39 +138,50 @@ def format_user_response(user: dict, compatibility: int) -> OnlineUserResponse:
 async def discover_online_users(
     field: Optional[str] = Query(None, description="Filter by creative field (e.g., 'Photography')"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of results"),
+    include_details: bool = Query(False, description="Include match breakdown and starters"),
     current_user: dict = Depends(_get_current_user_dependency)
 ):
     """
-    Discover compatible online users for collaboration
+    Discover compatible online users with AI-powered matching
     
     **Features:**
-    - Returns only online users (isOnline = true)
-    - Excludes current user
-    - Excludes already swiped users
-    - Calculates compatibility score (0-100)
-    - Sorts by compatibility (desc) and lastSeen (desc)
+    - ✅ AI-powered compatibility scoring (0-100)
+    - ✅ Returns only online users (isOnline = true)
+    - ✅ Excludes current user
+    - ✅ Excludes already swiped users
+    - ✅ ML-based semantic similarity
+    - ✅ Conversation starter suggestions
+    - ✅ Sorted by compatibility (desc) and lastSeen (desc)
     
-    **Compatibility Scoring:**
-    - Common skills: 40%
-    - Common interests: 40%
-    - Field match: 20%
+    **AI Compatibility Factors:**
+    - 30% Skill matching (complementary + overlap)
+    - 25% Interest alignment
+    - 15% Field compatibility (synergy matrix)
+    - 10% Experience level fit
+    - 10% Availability match
+    - 5% AI semantic similarity (embeddings)
+    - 5% Location proximity
     
     **Query Parameters:**
     - field: Filter by creative field (optional)
     - limit: Max results (1-100, default 20)
+    - include_details: Get match breakdown and conversation starters
     
     **Returns:**
-    - users: List of compatible online users with scores
+    - users: List of compatible online users with AI scores
     - count: Number of users returned
     - field_filter: Applied field filter (if any)
+    - ai_powered: Whether AI matching is active
     """
     try:
         current_user_id = current_user['_id']
         
+        # Initialize AI matching service
+        matching_service = get_matching_service(use_ai=settings.USE_AI_MATCHING)
+        
         # ===== STEP 1: GET ALREADY SWIPED USER IDS =====
         swiped_user_ids = set()
         try:
-            # Find all swipes by current user (both left and right)
             swipes_cursor = db.swipes().find(
                 {"userId": current_user_id},
                 {"swipedUserId": 1}
@@ -238,7 +194,6 @@ async def discover_online_users(
                     
         except Exception as e:
             logger.warning(f"[WARN] Could not fetch swipes: {e}")
-            # Continue without filtering swipes if collection doesn't exist yet
         
         # ===== STEP 2: BUILD QUERY FILTERS =====
         query_filters = {
@@ -256,28 +211,41 @@ async def discover_online_users(
                 "$options": "i"  # Case-insensitive
             }
         
-        # ===== STEP 3: FETCH ONLINE USERS =====
+        # ===== STEP 3: FETCH ONLINE USERS ===== 
         users_cursor = db.users().find(query_filters).limit(limit * 2)  # Fetch extra for sorting
         
         online_users = []
         async for user in users_cursor:
             online_users.append(user)
         
-        # ===== STEP 4: CALCULATE COMPATIBILITY & SORT =====
+        # ===== STEP 4: CALCULATE AI COMPATIBILITY & SORT =====
         users_with_scores = []
         
         for user in online_users:
-            # Calculate compatibility score
-            compatibility = calculate_compatibility(current_user, user)
-            
-            # Format user response
-            user_response = format_user_response(user, compatibility)
-            
-            users_with_scores.append({
-                'user': user_response,
-                'compatibility': compatibility,
-                'lastSeen': user.get('lastSeen', datetime.utcnow())
-            })
+            try:
+                # Calculate AI-powered match score
+                match_result = await matching_service.calculate_match_score(
+                    current_user, 
+                    user,
+                    context=None  # No distance for online discovery
+                )
+                
+                # Format user response
+                user_response = format_user_response(
+                    user, 
+                    match_result,
+                    include_details=include_details
+                )
+                
+                users_with_scores.append({
+                    'user': user_response,
+                    'compatibility': match_result.score,
+                    'lastSeen': user.get('lastSeen', datetime.utcnow())
+                })
+                
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to score user {user.get('_id')}: {e}")
+                continue
         
         # Sort by compatibility (desc), then lastSeen (desc)
         users_with_scores.sort(
@@ -293,14 +261,15 @@ async def discover_online_users(
         
         # ===== STEP 5: RETURN RESPONSE =====
         logger.info(
-            f"[OK] Discovery: Found {len(sorted_users)} online users for user {current_user_id} "
-            f"(field: {field or 'all'})"
+            f"[OK] AI Discovery: Found {len(sorted_users)} online users for user {current_user_id} "
+            f"(field: {field or 'all'}, AI: {settings.USE_AI_MATCHING})"
         )
         
         return OnlineUsersResponse(
             users=sorted_users,
             count=len(sorted_users),
-            field_filter=field
+            field_filter=field,
+            ai_powered=settings.USE_AI_MATCHING
         )
         
     except HTTPException:
@@ -326,7 +295,7 @@ async def get_discovery_stats(
     Returns:
     - total_online: Total online users
     - by_field: Breakdown by creative field
-    - avg_compatibility: Average compatibility with online users
+    - avg_compatibility: Average AI compatibility with online users
     """
     try:
         current_user_id = current_user['_id']
@@ -362,6 +331,8 @@ async def get_discovery_stats(
             by_field[field_name] = doc['count']
         
         # Calculate average compatibility (sample of 10 users)
+        matching_service = get_matching_service(use_ai=settings.USE_AI_MATCHING)
+        
         sample_users = []
         async for user in db.users().find(
             {"isOnline": True, "_id": {"$ne": current_user_id}}
@@ -369,10 +340,11 @@ async def get_discovery_stats(
             sample_users.append(user)
         
         if sample_users:
-            total_compatibility = sum(
-                calculate_compatibility(current_user, user)
-                for user in sample_users
-            )
+            total_compatibility = 0
+            for user in sample_users:
+                match_result = await matching_service.calculate_match_score(current_user, user)
+                total_compatibility += match_result.score
+            
             avg_compatibility = total_compatibility / len(sample_users)
         else:
             avg_compatibility = 0
@@ -381,6 +353,7 @@ async def get_discovery_stats(
             "total_online": total_online,
             "by_field": by_field,
             "avg_compatibility": round(avg_compatibility, 2),
+            "ai_enabled": settings.USE_AI_MATCHING,
             "timestamp": datetime.utcnow()
         }
         

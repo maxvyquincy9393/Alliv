@@ -58,7 +58,6 @@ jobs:
           files: ./frontend/coverage/coverage-final.json
           flags: frontend
           fail_ci_if_error: false
-        continue-on-error: true
 
   # ===========================================================================
   # BACKEND BUILD & TEST
@@ -116,15 +115,12 @@ jobs:
       
       - name: 🎨 Lint with Black
         run: black --check . || echo "Black not configured, skipping..."
-        continue-on-error: true
       
       - name: 🎨 Lint with Ruff
         run: ruff check . || echo "Ruff not configured, skipping..."
-        continue-on-error: true
       
       - name: 🎨 Lint with Flake8
         run: flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503 || echo "Flake8 not configured, skipping..."
-        continue-on-error: true
       
       - name: 🧪 Run tests with pytest
         run: pytest tests/ -v --tb=short --maxfail=5
@@ -143,7 +139,6 @@ jobs:
           files: ./backend/coverage.xml
           flags: backend
           fail_ci_if_error: false
-        continue-on-error: true
 
   # ===========================================================================
   # DOCKER BUILD TEST
@@ -199,7 +194,6 @@ jobs:
       - name: 🔍 NPM Audit (Frontend)
         working-directory: ./frontend
         run: npm audit --audit-level=moderate || echo "NPM audit found vulnerabilities"
-        continue-on-error: true
       
       - name: 🐍 Setup Python
         uses: actions/setup-python@v5
@@ -211,7 +205,6 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit || echo "Pip audit found vulnerabilities"
-        continue-on-error: true
 
   # ===========================================================================
   # ALL CHECKS PASSED
@@ -224,6 +217,8 @@ jobs:
     steps:
       - name: 🎉 Success
         run: echo "All CI checks passed successfully!"
+
+
 
 
 

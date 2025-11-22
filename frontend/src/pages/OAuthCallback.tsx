@@ -52,7 +52,7 @@ export const OAuthCallback = () => {
         setErrorMessage(message);
         setStatus('error');
         toast.error(message);
-        
+
         // Redirect to login after 3 seconds
         setTimeout(() => {
           navigate('/login');
@@ -69,14 +69,13 @@ export const OAuthCallback = () => {
         return;
       }
 
-      // Store token
-      localStorage.setItem('token', token);
+      // Backend has set HttpOnly cookie with token
       localStorage.setItem('authProvider', provider || 'oauth');
 
       // Fetch user profile to check completion status
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/me`, {
+        credentials: 'include', // Send HttpOnly cookies
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -97,20 +96,20 @@ export const OAuthCallback = () => {
       toast.success(`Welcome back! Logged in with ${providerName}`);
 
       // Check if profile needs completion
-      const needsProfileSetup = 
-        !userData.bio || 
+      const needsProfileSetup =
+        !userData.bio ||
         userData.bio.length < 20 ||
-        !userData.photos || 
+        !userData.photos ||
         userData.photos.length === 0 ||
-        !userData.skills || 
+        !userData.skills ||
         userData.skills.length === 0 ||
         userData.profileComplete === false;
 
       if (needsProfileSetup) {
         // New user or incomplete profile - redirect to profile setup
-        toast('Please complete your profile to start matching!', { 
+        toast('Please complete your profile to start matching!', {
           icon: '👋',
-          duration: 4000 
+          duration: 4000
         });
         setTimeout(() => {
           navigate('/setup-profile');
@@ -127,11 +126,10 @@ export const OAuthCallback = () => {
       setStatus('error');
       setErrorMessage(err instanceof Error ? err.message : 'Authentication failed');
       toast.error('Failed to complete login. Please try again.');
-      
-      // Clear potentially invalid token
-      localStorage.removeItem('token');
+
+      // Backend handles cookie cleanup
       localStorage.removeItem('user');
-      
+
       setTimeout(() => {
         navigate('/login');
       }, 2000);

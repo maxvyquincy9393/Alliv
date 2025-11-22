@@ -14,6 +14,7 @@ from ..config import settings
 from ..auth import get_current_user
 from ..db import get_db
 from ..email_utils import send_email
+from ..services.trust import update_user_trust_score
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -178,7 +179,11 @@ async def create_project(
             "updatedAt": datetime.utcnow()
         }
         
+        
         result = await get_db().projects.insert_one(project_doc)
+        
+        # Update trust score
+        await update_user_trust_score(str(current_user["_id"]))
         
         return {
             "projectId": str(result.inserted_id),

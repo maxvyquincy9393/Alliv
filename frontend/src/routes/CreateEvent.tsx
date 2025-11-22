@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Upload, X, MapPin, Users, Calendar, Clock, Link, ArrowLeft } from 'lucide-react';
-import { Layout } from '../components/Layout';
-import { GlassButton } from '../components/GlassButton';
+import { FullScreenLayout } from '../components/FullScreenLayout';
 import { fadeInUp, stagger } from '../lib/motion';
 import { useAuth } from '../hooks/useAuth';
 
@@ -127,8 +126,8 @@ export const CreateEvent = () => {
   }
 
   return (
-    <Layout>
-      <div className="max-w-3xl mx-auto px-4 py-8">
+    <FullScreenLayout>
+      <div className="max-w-3xl mx-auto px-4 py-8 pt-24">
         <motion.div
           variants={stagger(0.1)}
           initial="hidden"
@@ -149,7 +148,7 @@ export const CreateEvent = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Info */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Event Details</h2>
               
               {/* Name */}
@@ -161,7 +160,7 @@ export const CreateEvent = () => {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="e.g., Jakarta Tech Meetup"
                 />
                 {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
@@ -175,7 +174,7 @@ export const CreateEvent = () => {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors resize-none"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   placeholder="What's this event about? Who should attend?"
                   rows={4}
                 />
@@ -190,7 +189,7 @@ export const CreateEvent = () => {
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                 >
                   <option value="">Select event type</option>
                   {eventTypes.map(type => (
@@ -225,7 +224,7 @@ export const CreateEvent = () => {
                       </button>
                     </div>
                   ) : (
-                    <label className="w-full max-w-sm h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-xl hover:border-white/40 cursor-pointer transition-colors">
+                    <label className="w-full max-w-sm h-32 flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-xl hover:border-white/40 cursor-pointer transition-colors bg-white/5">
                       <Upload className="w-8 h-8 text-white/40 mb-2" />
                       <span className="text-sm text-white/40">Upload Banner</span>
                       <input
@@ -242,7 +241,7 @@ export const CreateEvent = () => {
             </motion.div>
 
             {/* Date & Time */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Date & Time</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -256,7 +255,7 @@ export const CreateEvent = () => {
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
                   />
                   {errors.date && <p className="text-red-400 text-sm mt-1">{errors.date}</p>}
                 </div>
@@ -271,7 +270,7 @@ export const CreateEvent = () => {
                     type="time"
                     value={formData.time}
                     onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
                   />
                   {errors.time && <p className="text-red-400 text-sm mt-1">{errors.time}</p>}
                 </div>
@@ -284,7 +283,7 @@ export const CreateEvent = () => {
                   <select
                     value={formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors [&>option]:bg-slate-900"
                   >
                     <option value="">Select duration</option>
                     <option value="30min">30 minutes</option>
@@ -301,7 +300,7 @@ export const CreateEvent = () => {
             </motion.div>
 
             {/* Location */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Location</h2>
               
               {/* Online Toggle */}
@@ -311,7 +310,7 @@ export const CreateEvent = () => {
                     type="checkbox"
                     checked={formData.isOnline}
                     onChange={(e) => setFormData({ ...formData, isOnline: e.target.checked })}
-                    className="w-5 h-5 rounded"
+                    className="w-5 h-5 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500"
                   />
                   <span className="text-white/80">This is an online event</span>
                 </label>
@@ -328,7 +327,7 @@ export const CreateEvent = () => {
                     type="url"
                     value={formData.onlineLink}
                     onChange={(e) => setFormData({ ...formData, onlineLink: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                     placeholder="https://meet.google.com/..."
                   />
                   {errors.onlineLink && <p className="text-red-400 text-sm mt-1">{errors.onlineLink}</p>}
@@ -344,7 +343,7 @@ export const CreateEvent = () => {
                     type="text"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                     placeholder="Venue name, Street address, City"
                   />
                   {errors.location && <p className="text-red-400 text-sm mt-1">{errors.location}</p>}
@@ -353,7 +352,7 @@ export const CreateEvent = () => {
             </motion.div>
 
             {/* Additional Info */}
-            <motion.div variants={fadeInUp} className="glass-card rounded-2xl p-6">
+            <motion.div variants={fadeInUp} className="glass-panel rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-white mb-4">Additional Information</h2>
               
               {/* Capacity */}
@@ -366,7 +365,7 @@ export const CreateEvent = () => {
                   type="number"
                   value={formData.capacity}
                   onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                  className="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-accent-blue transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="Maximum number of attendees"
                   min="1"
                 />
@@ -382,7 +381,7 @@ export const CreateEvent = () => {
                   {formData.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="px-3 py-1 bg-accent-purple/20 text-accent-purple rounded-full text-sm flex items-center gap-2"
+                      className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm flex items-center gap-2 border border-purple-500/30"
                     >
                       {tag}
                       <button
@@ -398,7 +397,7 @@ export const CreateEvent = () => {
                 <button
                   type="button"
                   onClick={addTag}
-                  className="px-4 py-2 glass rounded-lg text-sm text-white/60 hover:text-white transition-colors"
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white/60 hover:text-white transition-colors"
                 >
                   + Add Tag
                 </button>
@@ -418,26 +417,24 @@ export const CreateEvent = () => {
 
             {/* Submit Buttons */}
             <motion.div variants={fadeInUp} className="flex gap-4">
-              <GlassButton
-                variant="secondary"
+              <button
                 onClick={() => navigate('/events')}
-                fullWidth
                 type="button"
+                className="flex-1 px-6 py-3 rounded-xl font-semibold bg-white/5 text-white hover:bg-white/10 transition-all border border-white/10"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
-                variant="primary"
+              </button>
+              <button
                 type="submit"
-                fullWidth
                 disabled={loading}
+                className="flex-1 btn-primary px-6 py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating...' : 'Create Event'}
-              </GlassButton>
+              </button>
             </motion.div>
           </form>
         </motion.div>
       </div>
-    </Layout>
+    </FullScreenLayout>
   );
 };

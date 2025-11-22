@@ -38,7 +38,6 @@ test.describe('End-to-end collaboration flow', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           accessToken: 'mock-access',
-          refreshToken: 'mock-refresh',
           user: {
             id: 'user-kabags',
             email: body.email,
@@ -100,4 +99,3 @@ test.describe('End-to-end collaboration flow', () => {
     await expect(discoverCard).toBeVisible();
   });
 });
-

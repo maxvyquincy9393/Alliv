@@ -29,14 +29,14 @@ export const AnimatedBackground = () => {
         this.x = Math.random() * (canvas?.width || window.innerWidth);
         this.y = Math.random() * (canvas?.height || window.innerHeight);
         // Slower velocity for smoother feel
-        this.vx = (Math.random() - 0.5) * 0.2; 
+        this.vx = (Math.random() - 0.5) * 0.2;
         this.vy = (Math.random() - 0.5) * 0.2;
         this.radius = Math.random() * 1.5 + 0.5;
         this.maxLife = Math.random() * 100 + 200; // Longer life
         this.life = this.maxLife;
-        
-        // Monochrome colors (white/grey)
-        const colors = ['#FFFFFF', '#F3F4F6', '#E2E8F0', '#94A3B8'];
+
+        // Deep space colors (blue/violet/cyan)
+        const colors = ['#3B82F6', '#8B5CF6', '#06B6D4', '#FFFFFF'];
         this.color = colors[Math.floor(Math.random() * colors.length)];
       }
 
@@ -86,7 +86,7 @@ export const AnimatedBackground = () => {
           const distance = Math.sqrt(
             Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)
           );
-          
+
           if (distance < 120) {
             const opacity = (1 - distance / 120) * 0.1; // Very subtle lines
             if (ctx) {
@@ -108,12 +108,12 @@ export const AnimatedBackground = () => {
       if (!ctx || !canvas) return;
       // Clear with slight trail or full clear? Full clear for now to keep it clean.
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       particles.forEach(particle => {
         particle.update();
         particle.draw();
       });
-      
+
       drawConnections();
       requestAnimationFrame(animate);
     };
@@ -137,13 +137,13 @@ export const AnimatedBackground = () => {
         className="fixed inset-0 pointer-events-none"
         style={{ zIndex: 1 }}
       />
-      
+
       {/* Animated gradient orbs - Monochrome & Subtle */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
         <motion.div
           className="absolute w-[800px] h-[800px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%)',
             filter: 'blur(80px)',
             top: '-20%',
             left: '-10%',
@@ -158,11 +158,11 @@ export const AnimatedBackground = () => {
             ease: 'easeInOut',
           }}
         />
-        
+
         <motion.div
           className="absolute w-[600px] h-[600px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 70%)',
             filter: 'blur(60px)',
             bottom: '-10%',
             right: '-10%',

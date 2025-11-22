@@ -1,661 +1,466 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../services/api';
 import {
   Heart,
   MessageCircle,
   Share2,
-  Bookmark,
   MoreHorizontal,
-  TrendingUp,
-  Users,
-  Briefcase,
-  Calendar,
-  MapPin,
-  DollarSign,
-  Clock,
-  Award,
-  Star,
+  Image as ImageIcon,
+  Link as LinkIcon,
   Send,
-  Plus,
-  Zap,
-  Target,
-  Globe
+  Bookmark,
+  Globe,
+  Users,
+  TrendingUp,
+  Briefcase,
+  Star,
+  Video,
+  RefreshCw
 } from 'lucide-react';
-import { Industry } from '../types/collaborator';
-
-interface Post {
-  id: string;
-  type: 'update' | 'talent-request' | 'event' | 'showcase' | 'milestone' | 'opportunity';
-  author: {
-    id: string;
-    name: string;
-    avatar: string;
-    role: string;
-    verified: boolean;
-  };
-  content: {
-    text: string;
-    media?: Media[];
-    links?: string[];
-    tags: string[];
-    mentions?: string[];
-  };
-  project?: {
-    id: string;
-    name: string;
-    industry: Industry;
-    logo?: string;
-  };
-  engagement: {
-    likes: number;
-    comments: number;
-    shares: number;
-    views: number;
-    bookmarks: number;
-  };
-  userEngagement: {
-    liked: boolean;
-    bookmarked: boolean;
-    shared: boolean;
-  };
-  timestamp: Date;
-  visibility: 'public' | 'connections' | 'project' | 'private';
-
-  // Type-specific fields
-  talentRequest?: TalentRequest;
-  event?: EventDetails;
-  showcase?: ShowcaseDetails;
-  milestone?: MilestoneDetails;
-  opportunity?: OpportunityDetails;
-}
-
-interface Media {
-  type: 'image' | 'video' | 'audio';
-  url: string;
-  thumbnail?: string;
-  caption?: string;
-}
-
-interface TalentRequest {
-  roles: string[];
-  skills: string[];
-  experience: string;
-  commitment: 'full-time' | 'part-time' | 'freelance' | 'contract';
-  budget?: string;
-  deadline: Date;
-  applicants: number;
-  location: 'remote' | 'onsite' | 'hybrid';
-}
-
-interface EventDetails {
-  name: string;
-  date: Date;
-  location: string;
-  type: 'workshop' | 'meetup' | 'conference' | 'webinar' | 'hackathon';
-  attendees: number;
-  maxAttendees: number;
-  price?: number;
-  registrationUrl?: string;
-}
-
-interface ShowcaseDetails {
-  projectName: string;
-  category: string;
-  achievements: string[];
-  metrics: {
-    label: string;
-    value: string;
-  }[];
-  collaborators: string[];
-}
-
-interface MilestoneDetails {
-  achievement: string;
-  impact: string;
-  metrics?: {
-    label: string;
-    value: string;
-  }[];
-}
-
-interface OpportunityDetails {
-  title: string;
-  company: string;
-  type: 'job' | 'project' | 'collaboration' | 'investment';
-  compensation: string;
-  deadline?: Date;
-  requirements: string[];
-}
+import { useAuth } from '../hooks/useAuth';
+import type { Post, Industry, PostType, FeedParams } from '../types/post';
+import api from '../services/api';
 
 interface CommunityFeedProps {
   onCreatePost?: () => void;
   onEngagement?: (postId: string, type: string) => void;
+  refreshTrigger?: number;
 }
 
-export const CommunityFeed: React.FC<CommunityFeedProps> = ({
-  onCreatePost,
-  onEngagement
-}) => {
+export const CommunityFeed = ({ onCreatePost, refreshTrigger = 0 }: CommunityFeedProps) => {
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  const fetchPosts = async () => {
-    try {
-      setLoading(true);
-      const response = await api.feed.getFeed();
-      if (response.data) {
-        // Transform API response to match component state
-        setPosts(response.data.map((p: any) => ({
-          id: p._id || p.id,
-          type: p.type,
-          author: p.author,
-          content: {
-            ...p.content,
-            // Map backend media_urls to frontend media objects if needed
-            media: p.media_urls ? p.media_urls.map((url: string) => ({
-              type: 'image', // Default to image, backend doesn't store type in media_urls list
-              url: url
-            })) : (p.content.media || []),
-            tags: p.tags || []
-          },
-          project: p.project,
-          engagement: p.engagement || { likes: 0, comments: 0, shares: 0, views: 0, bookmarks: 0 },
-          userEngagement: {
-            liked: p.user_engagement?.liked || false,
-            bookmarked: p.user_engagement?.bookmarked || false,
-            shared: p.user_engagement?.shared || false
-          },
-          timestamp: new Date(p.timestamp),
-          visibility: p.visibility,
-          // Type specific fields might be in content or root, handle both
-          talentRequest: p.talentRequest || p.content.talentRequest,
-          event: p.event || p.content.event,
-          showcase: p.showcase || p.content.showcase,
-          milestone: p.milestone || p.content.milestone,
-          opportunity: p.opportunity || p.content.opportunity
-        })));
-      }
-    } catch (err) {
-      console.error("Failed to fetch feed:", err);
-      setError("Failed to load feed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const [filter, setFilter] = useState<'all' | 'following' | 'trending' | 'industry'>('all');
   const [selectedIndustry, setSelectedIndustry] = useState<Industry | 'all'>('all');
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
 
-  const handleLike = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          engagement: {
-            ...post.engagement,
-            likes: post.userEngagement.liked
-              ? post.engagement.likes - 1
-              : post.engagement.likes + 1
-          },
-          userEngagement: {
-            ...post.userEngagement,
-            liked: !post.userEngagement.liked
-          }
-        };
-      }
-      return post;
-    }));
+  useEffect(() => {
+    loadPosts();
+  }, [filter, selectedIndustry, refreshTrigger]);
 
-    if (onEngagement) {
-      onEngagement(postId, 'like');
+  const loadPosts = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params: FeedParams = {
+        limit: 20,
+        offset: 0,
+        filter_type: filter,
+      };
+
+      if (filter === 'industry' && selectedIndustry !== 'all') {
+        params.industry = selectedIndustry;
+      }
+
+      const response = await api.feed.getFeed(params);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.data) {
+        setPosts(response.data);
+      }
+    } catch (err: any) {
+      console.error('Error loading feed:', err);
+      setError(err.message || 'Failed to load feed');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleBookmark = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
+  const handleLike = async (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const action = post.userEngagement.liked ? 'unlike' : 'like';
+
+    // Optimistic update
+    setPosts(current => current.map(p => {
+      if (p.id === postId) {
         return {
-          ...post,
+          ...p,
           engagement: {
-            ...post.engagement,
-            bookmarks: post.userEngagement.bookmarked
-              ? post.engagement.bookmarks - 1
-              : post.engagement.bookmarks + 1
+            ...p.engagement,
+            likes: p.userEngagement.liked ? p.engagement.likes - 1 : p.engagement.likes + 1
           },
           userEngagement: {
-            ...post.userEngagement,
-            bookmarked: !post.userEngagement.bookmarked
+            ...p.userEngagement,
+            liked: !p.userEngagement.liked
           }
         };
       }
-      return post;
+      return p;
     }));
 
-    if (onEngagement) {
-      onEngagement(postId, 'bookmark');
+    try {
+      await api.feed.engagePost(postId, action);
+    } catch (err) {
+      console.error('Like error:', err);
+      // Revert on error
+      loadPosts();
     }
   };
 
-  const getPostIcon = (type: Post['type']) => {
+  const handleBookmark = async (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const action = post.userEngagement.bookmarked ? 'unbookmark' : 'bookmark';
+
+    // Optimistic update
+    setPosts(current => current.map(p => {
+      if (p.id === postId) {
+        return {
+          ...p,
+          userEngagement: {
+            ...p.userEngagement,
+            bookmarked: !p.userEngagement.bookmarked
+          }
+        };
+      }
+      return p;
+    }));
+
+    try {
+      await api.feed.engagePost(postId, action);
+    } catch (err) {
+      console.error('Bookmark error:', err);
+      // Revert on error
+      loadPosts();
+    }
+  };
+
+  const handleShare = async (postId: string) => {
+    try {
+      await api.feed.engagePost(postId, 'share');
+      // Could show share modal here
+      console.log('Post shared:', postId);
+    } catch (err) {
+      console.error('Share error:', err);
+    }
+  };
+
+  const getPostIcon = (type: PostType) => {
     switch (type) {
-      case 'update': return Zap;
+      case 'showcase': return ImageIcon;
+      case 'collaboration': return Users;
       case 'talent-request': return Users;
-      case 'event': return Calendar;
-      case 'showcase': return Award;
-      case 'milestone': return Target;
+      case 'resource': return LinkIcon;
+      case 'discussion': return MessageCircle;
+      case 'milestone': return Star;
       case 'opportunity': return Briefcase;
-      default: return Zap;
+      default: return MessageCircle;
     }
   };
 
-  const getPostColor = (type: Post['type']) => {
-    switch (type) {
-      case 'update': return 'from-blue-500 to-cyan-500';
-      case 'talent-request': return 'from-purple-500 to-pink-500';
-      case 'event': return 'from-yellow-500 to-orange-500';
-      case 'showcase': return 'from-green-500 to-emerald-500';
-      case 'milestone': return 'from-red-500 to-pink-500';
-      case 'opportunity': return 'from-indigo-500 to-purple-500';
-      default: return 'from-gray-500 to-gray-600';
-    }
-  };
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-  const renderPostContent = (post: Post) => {
-    switch (post.type) {
-      case 'showcase':
-        return post.showcase && (
-          <div className="mt-4 bg-gradient-to-r from-white/5 to-white/10 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-lg font-semibold">{post.showcase.projectName}</h4>
-              <span className="px-3 py-1 rounded-full bg-white/10 text-xs">
-                {post.showcase.category}
-              </span>
-            </div>
-
-            {post.showcase.achievements.length > 0 && (
-              <div className="mb-3 space-y-1">
-                {post.showcase.achievements.map((achievement, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-sm">
-                    <Award size={14} className="text-yellow-400" />
-                    <span>{achievement}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {post.showcase.metrics.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 mb-3">
-                {post.showcase.metrics.map((metric, idx) => (
-                  <div key={idx} className="text-center">
-                    <div className="text-xl font-bold">{metric.value}</div>
-                    <div className="text-xs text-white/60">{metric.label}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {post.showcase.collaborators.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-white/60">
-                <Users size={14} />
-                <span>With {post.showcase.collaborators.join(', ')}</span>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'talent-request':
-        return post.talentRequest && (
-          <div className="mt-4 bg-gradient-to-r from-white/5 to-white/10 rounded-xl p-4 border border-white/10">
-            <div className="grid grid-cols-2 gap-4 mb-3">
-              <div>
-                <div className="text-xs text-white/60 mb-1">Role</div>
-                <div className="font-medium">{post.talentRequest.roles.join(', ')}</div>
-              </div>
-              <div>
-                <div className="text-xs text-white/60 mb-1">Commitment</div>
-                <div className="font-medium capitalize">{post.talentRequest.commitment}</div>
-              </div>
-              <div>
-                <div className="text-xs text-white/60 mb-1">Location</div>
-                <div className="font-medium capitalize">{post.talentRequest.location}</div>
-              </div>
-              <div>
-                <div className="text-xs text-white/60 mb-1">Budget</div>
-                <div className="font-medium">{post.talentRequest.budget}</div>
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <div className="text-xs text-white/60 mb-2">Required Skills</div>
-              <div className="flex flex-wrap gap-2">
-                {post.talentRequest.skills.map(skill => (
-                  <span key={skill} className="px-2 py-1 rounded-full bg-white/10 text-xs">
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              <div className="flex items-center gap-2 text-sm text-white/60">
-                <Clock size={14} />
-                <span>Deadline: {new Date(post.talentRequest.deadline).toLocaleDateString()}</span>
-              </div>
-              <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] text-black text-sm font-medium">
-                Apply Now
-              </button>
-            </div>
-          </div>
-        );
-
-      case 'event':
-        return post.event && (
-          <div className="mt-4 bg-gradient-to-r from-white/5 to-white/10 rounded-xl p-4 border border-white/10">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h4 className="text-lg font-semibold">{post.event.name}</h4>
-                <div className="flex items-center gap-3 mt-1 text-sm text-white/60">
-                  <span className="flex items-center gap-1">
-                    <Calendar size={14} />
-                    {new Date(post.event.date).toLocaleDateString()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MapPin size={14} />
-                    {post.event.location}
-                  </span>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-white/10 text-xs capitalize">
-                {post.event.type}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="text-sm">
-                  <span className="font-semibold">{post.event.attendees}</span>
-                  <span className="text-white/60">/{post.event.maxAttendees} attending</span>
-                </div>
-                {post.event.price && (
-                  <div className="flex items-center gap-1 text-sm">
-                    <DollarSign size={14} />
-                    <span className="font-semibold">${post.event.price}</span>
-                  </div>
-                )}
-              </div>
-              <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] text-black text-sm font-medium">
-                Register
-              </button>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A0F1C] to-[#1A1F3A] text-white">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-[#0F172A] text-slate-200">
+      <div className="max-w-4xl mx-auto px-6 py-8 md:pl-80 pt-24">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Community Feed</h1>
-            <p className="text-white/60 text-lg">Discover opportunities, showcase work, and connect</p>
+            <h1 className="text-3xl font-bold text-white mb-2">Community Feed</h1>
+            <p className="text-slate-400">Discover opportunities, showcase work, and connect.</p>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onCreatePost}
-            className="px-6 py-3 rounded-full bg-white text-black font-bold shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] transition-shadow flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Create Post
-          </motion.button>
-        </div>
-
-        {/* Filters */}
-        <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-          <div className="flex gap-2 p-1.5 bg-white/5 rounded-2xl backdrop-blur-md border border-white/10">
-            {(['all', 'following', 'trending', 'industry'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-5 py-2.5 rounded-xl capitalize transition-all font-medium flex items-center gap-2 ${filter === f
-                  ? 'bg-white text-black shadow-lg'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-                  }`}
-              >
-                {f === 'all' && <Globe size={16} />}
-                {f === 'following' && <Users size={16} />}
-                {f === 'trending' && <TrendingUp size={16} />}
-                {f === 'industry' && <Briefcase size={16} />}
-                {f}
-              </button>
-            ))}
-          </div>
-
-          {filter === 'industry' && (
-            <select
-              value={selectedIndustry}
-              onChange={(e) => setSelectedIndustry(e.target.value as Industry | 'all')}
-              className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white backdrop-blur-md focus:outline-none focus:border-white/30"
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={loadPosts}
+              disabled={loading}
+              className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all disabled:opacity-50"
+              title="Refresh feed"
             >
-              <option value="all">All Industries</option>
-              {Object.values(Industry).map(ind => (
-                <option key={ind} value={ind}>{ind}</option>
-              ))}
-            </select>
-          )}
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </motion.button>
+            {onCreatePost && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onCreatePost}
+                className="px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold shadow-lg shadow-blue-900/20 hover:bg-blue-500 transition-all flex items-center gap-2"
+              >
+                <ImageIcon size={20} />
+                Create Post
+              </motion.button>
+            )}
+          </div>
         </div>
 
-        {/* Posts */}
-        <div className="space-y-6">
-          <AnimatePresence>
-            {posts.map((post, index) => {
-              const PostIcon = getPostIcon(post.type);
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-between"
+          >
+            <span>{error}</span>
+            <button onClick={loadPosts} className="text-red-300 hover:text-red-200">
+              Retry
+            </button>
+          </motion.div>
+        )}
 
-              return (
-                <motion.article
-                  key={post.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="glass-card rounded-3xl overflow-hidden"
-                >
-                  {/* Post Header */}
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={post.author.avatar}
-                          alt={post.author.name}
-                          className="w-12 h-12 rounded-full"
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{post.author.name}</h3>
-                            {post.author.verified && (
-                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
-                                <Star size={10} className="text-white" />
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 rounded-full border-4 border-slate-700 border-t-blue-500 animate-spin mb-4" />
+            <p className="text-slate-400">Loading feed...</p>
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="flex gap-2 p-1 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                {(['all', 'following', 'trending', 'industry'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-4 py-2 rounded-lg capitalize transition-all font-medium flex items-center gap-2 whitespace-nowrap ${filter === f
+                        ? 'bg-slate-700 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                      }`}
+                  >
+                    {f === 'all' && <Globe size={16} />}
+                    {f === 'following' && <Users size={16} />}
+                    {f === 'trending' && <TrendingUp size={16} />}
+                    {f === 'industry' && <Briefcase size={16} />}
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Posts */}
+            {posts.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                  <ImageIcon size={32} className="text-slate-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">No posts yet</h3>
+                <p className="text-slate-400 mb-6">Be the first to share something!</p>
+                {onCreatePost && (
+                  <button
+                    onClick={onCreatePost}
+                    className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors"
+                  >
+                    Create First Post
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <AnimatePresence mode="popLayout">
+                  {posts.map((post, index) => {
+                    const PostIcon = getPostIcon(post.type);
+                    const hasMedia = post.content.media && post.content.media.length > 0;
+
+                    return (
+                      <motion.article
+                        key={post.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden hover:border-slate-600 transition-colors"
+                      >
+                        {/* Post Header */}
+                        <div className="p-6">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-start gap-3">
+                              <img
+                                src={post.author.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.author.name)}&background=random`}
+                                alt={post.author.name}
+                                className="w-12 h-12 rounded-full border border-slate-700"
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-bold text-white">{post.author.name}</h3>
+                                  {post.author.verified && (
+                                    <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                      <Star size={10} className="text-white" />
+                                    </div>
+                                  )}
+                                  <div className="px-2 py-0.5 rounded-full bg-slate-700/50 border border-slate-600/50 flex items-center gap-1">
+                                    <PostIcon size={12} className="text-slate-400" />
+                                    <span className="text-xs capitalize text-slate-300">
+                                      {post.type.replace('-', ' ')}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-slate-400">
+                                  <span>{post.author.role}</span>
+                                  <span>•</span>
+                                  <span>{formatTimestamp(post.timestamp)}</span>
+                                </div>
                               </div>
-                            )}
-                            <div className={`px-2 py-1 rounded-full bg-gradient-to-r ${getPostColor(post.type)} flex items-center gap-1`}>
-                              <PostIcon size={12} />
-                              <span className="text-xs capitalize">{post.type.replace('-', ' ')}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-white/60">
-                            <span>{post.author.role}</span>
-                            {post.project && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  at {post.project.name}
-                                </span>
-                              </>
-                            )}
-                            <span>•</span>
-                            <span>{new Date(post.timestamp).toLocaleTimeString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <button className="p-2 rounded-lg hover:bg-white/10">
-                        <MoreHorizontal size={18} />
-                      </button>
-                    </div>
-
-                    {/* Post Content */}
-                    <div className="mb-4">
-                      <p className="text-white/90 whitespace-pre-wrap">{post.content.text}</p>
-
-                      {/* Tags and Mentions */}
-                      {(post.content.tags.length > 0 || post.content.mentions?.length) && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {post.content.tags.map(tag => (
-                            <span key={tag} className="text-[#35F5FF] hover:underline cursor-pointer">
-                              #{tag}
-                            </span>
-                          ))}
-                          {post.content.mentions?.map(mention => (
-                            <span key={mention} className="text-[#7F6CFF] hover:underline cursor-pointer">
-                              {mention}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Media */}
-                    {post.content.media && post.content.media.length > 0 && (
-                      <div className="mb-4 -mx-6">
-                        {post.content.media[0].type === 'image' && (
-                          <img
-                            src={post.content.media[0].url}
-                            alt="Post media"
-                            className="w-full"
-                          />
-                        )}
-                        {post.content.media[0].type === 'video' && (
-                          <div className="relative aspect-video bg-black">
-                            <video
-                              src={post.content.media[0].url}
-                              poster={post.content.media[0].thumbnail}
-                              controls
-                              className="w-full h-full"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Type-specific content */}
-                    {renderPostContent(post)}
-                  </div>
-
-                  {/* Engagement Bar */}
-                  <div className="px-6 py-4 border-t border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-4 text-sm text-white/60">
-                        <span>{post.engagement.likes} likes</span>
-                        <span>{post.engagement.comments} comments</span>
-                        <span>{post.engagement.shares} shares</span>
-                        <span>{post.engagement.views} views</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => handleLike(post.id)}
-                          className={`p-2 rounded-lg transition-colors ${post.userEngagement.liked
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'hover:bg-white/10 text-white/60'
-                            }`}
-                        >
-                          <Heart size={18} fill={post.userEngagement.liked ? 'currentColor' : 'none'} />
-                        </motion.button>
-
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => setShowComments(showComments === post.id ? null : post.id)}
-                          className="p-2 rounded-lg hover:bg-white/10 text-white/60"
-                        >
-                          <MessageCircle size={18} />
-                        </motion.button>
-
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="p-2 rounded-lg hover:bg-white/10 text-white/60"
-                        >
-                          <Share2 size={18} />
-                        </motion.button>
-                      </div>
-
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleBookmark(post.id)}
-                        className={`p-2 rounded-lg transition-colors ${post.userEngagement.bookmarked
-                          ? 'bg-yellow-500/20 text-yellow-400'
-                          : 'hover:bg-white/10 text-white/60'
-                          }`}
-                      >
-                        <Bookmark size={18} fill={post.userEngagement.bookmarked ? 'currentColor' : 'none'} />
-                      </motion.button>
-                    </div>
-                  </div>
-
-                  {/* Comments Section */}
-                  <AnimatePresence>
-                    {showComments === post.id && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-6 pb-4 border-t border-white/10"
-                      >
-                        <div className="mt-4 flex gap-3">
-                          <img
-                            src="/current-user-avatar.jpg"
-                            alt="You"
-                            className="w-8 h-8 rounded-full"
-                          />
-                          <div className="flex-1 flex gap-2">
-                            <input
-                              type="text"
-                              value={commentText}
-                              onChange={(e) => setCommentText(e.target.value)}
-                              placeholder="Write a comment..."
-                              className="flex-1 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-[#35F5FF]/50 focus:outline-none"
-                            />
-                            <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#35F5FF] to-[#7F6CFF] text-black">
-                              <Send size={16} />
+                            <button className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                              <MoreHorizontal size={18} />
                             </button>
                           </div>
+
+                          {/* Post Content */}
+                          <div className="mb-4">
+                            <p className="text-slate-200 whitespace-pre-wrap leading-relaxed">
+                              {post.content.text}
+                            </p>
+
+                            {/* Tags */}
+                            {post.content.tags && post.content.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {post.content.tags.map(tag => (
+                                  <span
+                                    key={tag}
+                                    className="text-blue-400 hover:underline cursor-pointer text-sm"
+                                  >
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Media */}
+                          {hasMedia && (
+                            <div className="mb-4 -mx-6 bg-black/20 rounded-xl overflow-hidden">
+                              {post.content.media![0].type === 'image' && (
+                                <img
+                                  src={post.content.media![0].url}
+                                  alt="Post media"
+                                  className="w-full max-h-[500px] object-contain"
+                                />
+                              )}
+                              {post.content.media![0].type === 'video' && (
+                                <div className="relative">
+                                  <video
+                                    src={post.content.media![0].url}
+                                    controls
+                                    className="w-full max-h-[500px]"
+                                    poster={post.content.media![0].thumbnail}
+                                  />
+                                  <div className="absolute top-3 left-3 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm flex items-center gap-1">
+                                    <Video size={14} className="text-white" />
+                                    <span className="text-xs text-white">Video</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.article>
-              );
-            })}
-          </AnimatePresence>
-        </div>
+
+                        {/* Engagement Bar */}
+                        <div className="px-6 py-3 border-t border-slate-700/50 bg-slate-800/20">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleLike(post.id)}
+                                className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${post.userEngagement.liked
+                                    ? 'text-red-400 bg-red-500/10'
+                                    : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                                  }`}
+                              >
+                                <Heart size={18} fill={post.userEngagement.liked ? 'currentColor' : 'none'} />
+                                <span className="text-sm font-medium">{post.engagement.likes}</span>
+                              </motion.button>
+
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => setShowComments(showComments === post.id ? null : post.id)}
+                                className="p-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                              >
+                                <MessageCircle size={18} />
+                                <span className="text-sm font-medium">{post.engagement.comments}</span>
+                              </motion.button>
+
+                              <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleShare(post.id)}
+                                className="p-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                              >
+                                <Share2 size={18} />
+                                <span className="text-sm font-medium">{post.engagement.shares}</span>
+                              </motion.button>
+                            </div>
+
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleBookmark(post.id)}
+                              className={`p-2 rounded-lg transition-colors ${post.userEngagement.bookmarked
+                                  ? 'text-yellow-400 bg-yellow-500/10'
+                                  : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                                }`}
+                            >
+                              <Bookmark size={18} fill={post.userEngagement.bookmarked ? 'currentColor' : 'none'} />
+                            </motion.button>
+                          </div>
+                        </div>
+
+                        {/* Comments Section */}
+                        <AnimatePresence>
+                          {showComments === post.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="px-6 pb-4 border-t border-slate-700/50 bg-slate-800/30"
+                            >
+                              <div className="mt-4 flex gap-3">
+                                <img
+                                  src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=random`}
+                                  alt="You"
+                                  className="w-8 h-8 rounded-full flex-shrink-0"
+                                />
+                                <div className="flex-1 flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={commentText}
+                                    onChange={(e) => setCommentText(e.target.value)}
+                                    placeholder="Write a comment..."
+                                    className="flex-1 px-4 py-2 rounded-xl bg-slate-700/50 border border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none transition-colors"
+                                  />
+                                  <button
+                                    disabled={!commentText.trim()}
+                                    className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <Send size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.article>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

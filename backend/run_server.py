@@ -6,10 +6,14 @@ Ensures proper Python path and environment setup.
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add the backend directory to Python path
 backend_dir = Path(__file__).parent.absolute()
 sys.path.insert(0, str(backend_dir))
+
+# Load .env file if it exists
+load_dotenv()
 
 # Set default environment variables for development
 os.environ.setdefault("NODE_ENV", "development")
@@ -32,6 +36,8 @@ if __name__ == "__main__":
         reload_dirs=[str(backend_dir / "app")],
         log_level="info"
     )
+
+
 
 
 

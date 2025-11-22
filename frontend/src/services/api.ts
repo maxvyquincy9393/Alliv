@@ -6,6 +6,12 @@ import { config } from '../config';
 
 const API_BASE_URL = config.apiUrl;
 
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function formatErrorDetail(detail: any, fallback: string, status?: number): string {
   if (!detail) {
     return fallback;
@@ -107,17 +113,16 @@ async function fetchAPI<T = any>(
   options: RequestInit = {},
   signal?: AbortSignal
 ): Promise<ApiResponse<T>> {
-  const token = localStorage.getItem('access_token');
-  const csrfToken = localStorage.getItem('csrf_token');
+  // CSRF token (if needed for POST/PUT/DELETE)
+  const csrfToken = getCookie('csrf_token');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
 
-  if (token && !endpoint.includes('/auth/')) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  // Cookie-based auth: No Authorization header needed
+  // Cookies are sent automatically with credentials: 'include'
 
   if (csrfToken) {
     headers['X-CSRF-Token'] = csrfToken;
@@ -128,7 +133,7 @@ async function fetchAPI<T = any>(
       ...options,
       headers,
       signal, // Add abort signal support
-      credentials: 'include',
+      credentials: 'include', // Always include cookies
     });
 
     let data: any = null;
@@ -263,15 +268,13 @@ export const authAPI = {
    * Login with email/password
    */
   login: async (credentials: LoginCredentials) => {
-    const response = await fetchAPI<{ access_token: string; refresh_token: string }>('/auth/login', {
+    const response = await fetchAPI<{ accessToken?: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
 
-    if (response.data?.access_token) {
-      localStorage.setItem('access_token', response.data.access_token);
-      localStorage.setItem('refresh_token', response.data.refresh_token);
-    }
+    // Backend sets tokens in HttpOnly cookies
+    // No need to store tokens in localStorage
 
     return response;
   },
@@ -284,9 +287,6 @@ export const authAPI = {
       method: 'POST',
     });
 
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-
     return response;
   },
 
@@ -294,21 +294,9 @@ export const authAPI = {
    * Refresh access token
    */
   refreshToken: async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      return { error: 'No refresh token' };
-    }
-
-    const response = await fetchAPI<{ access_token: string }>('/auth/refresh', {
+    return fetchAPI<{ access_token: string }>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
     });
-
-    if (response.data?.access_token) {
-      localStorage.setItem('access_token', response.data.access_token);
-    }
-
-    return response;
   },
 
   /**
@@ -792,44 +780,208 @@ export const safetyAPI = {
   },
 };
 
+
 // Feed API
 export const feedAPI = {
   /**
    * Get feed posts
    */
-  getFeed: async (params?: { limit?: number; offset?: number; type?: string }) => {
+  getFeed: async (params?: {
+    limit?: number;
+    offset?: number;
+    filter_type?: 'all' | 'following' | 'trending' | 'industry';
+    industry?: string;
+    tags?: string;
+  }) => {
     const query = new URLSearchParams();
     if (params?.limit) query.append('limit', params.limit.toString());
     if (params?.offset) query.append('offset', params.offset.toString());
-    if (params?.type) query.append('type', params.type);
+    if (params?.filter_type) query.append('filter_type', params.filter_type);
+    if (params?.industry) query.append('industry', params.industry);
+    if (params?.tags) query.append('tags', params.tags);
 
-    return fetchAPI(`/feed?${query.toString()}`);
+    return fetchAPI(`/api/feed?${query.toString()}`);
   },
 
   /**
    * Create a new post
    */
   createPost: async (data: {
-    content: string;
     type: string;
+    content: {
+      text: string;
+      tags?: string[];
+    };
     media_urls?: string[];
-    tags?: string[];
     visibility?: string;
-    details?: any;
+    project_id?: string | null;
+    tags?: string[];
   }) => {
-    return fetchAPI('/feed', {
+    return fetchAPI('/api/feed', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
   /**
-   * Like/Unlike a post
+   * Update post
    */
-  likePost: async (postId: string) => {
-    return fetchAPI(`/feed/${postId}/like`, {
-      method: 'POST',
+  updatePost: async (postId: string, data: {
+    content?: {
+      text?: string;
+      tags?: string[];
+    };
+    visibility?: string;
+    tags?: string[];
+  }) => {
+    return fetchAPI(`/api/feed/${postId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
+  },
+
+  /**
+   * Delete post
+   */
+  deletePost: async (postId: string) => {
+    return fetchAPI(`/api/feed/${postId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Engage with post (like, bookmark, share)
+   */
+  engagePost: async (postId: string, action: 'like' | 'unlike' | 'bookmark' | 'unbookmark' | 'share') => {
+    return fetchAPI(`/api/feed/${postId}/engage`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  },
+
+  /**
+   * Get post comments
+   */
+  getComments: async (postId: string, params?: { limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.offset) query.append('offset', params.offset.toString());
+
+    return fetchAPI(`/api/feed/${postId}/comments?${query.toString()}`);
+  },
+
+  /**
+   * Create comment
+   */
+  createComment: async (postId: string, data: { content: string; parent_id?: string | null }) => {
+    return fetchAPI(`/api/feed/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get trending tags
+   */
+  getTrendingTags: async (limit = 20) => {
+    return fetchAPI(`/api/feed/trending-tags?limit=${limit}`);
+  },
+};
+
+// Media API
+export const mediaAPI = {
+  /**
+   * Upload media file (image or video)
+   */
+  uploadMedia: async (formData: FormData, onProgress?: (percent: number) => void) => {
+    // Don't use fetchAPI for FormData uploads, use raw fetch
+    const csrfToken = getCookie('csrf_token');
+    const tokenResp = await authAPI.refreshToken();
+    const token = tokenResp.data?.access_token || null;
+
+    return new Promise<ApiResponse>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      // Track upload progress
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent);
+          }
+        });
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.response);
+            resolve({ data });
+          } catch (e) {
+            reject(new Error('Invalid response'));
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.response);
+            resolve({ error: errorData.detail || 'Upload failed' });
+          } catch (e) {
+            resolve({ error: `Upload failed with status ${xhr.status}` });
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload cancelled'));
+      });
+
+      xhr.open('POST', `${API_BASE_URL}/api/media/upload`);
+
+      // Add auth header if token exists
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+      if (csrfToken) {
+        xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+      }
+
+      // Include cookies for cookie-based auth
+      xhr.withCredentials = true;
+
+      xhr.send(formData);
+    });
+  },
+
+  /**
+   * Upload multiple media files
+   */
+  uploadMultiple: async (files: File[], onProgress?: (percent: number) => void) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    return mediaAPI.uploadMedia(formData, onProgress);
+  },
+
+  /**
+   * Delete media file
+   */
+  deleteMedia: async (url: string) => {
+    return fetchAPI('/api/media/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({ url }),
+    });
+  },
+
+  /**
+   * Validate media URL
+   */
+  validateMedia: async (url: string) => {
+    return fetchAPI(`/api/media/validate?url=${encodeURIComponent(url)}`);
   },
 };
 
@@ -885,7 +1037,6 @@ export const healthAPI = {
 
 // Export all APIs
 const api = {
-  getToken: () => localStorage.getItem('token'),
   auth: authAPI,
   profile: profileAPI,
   upload: uploadAPI,
@@ -897,6 +1048,7 @@ const api = {
   safety: safetyAPI,
   connections: connectionsAPI,
   feed: feedAPI,
+  media: mediaAPI,
   insights: insightsAPI,
   health: healthAPI,
 };
