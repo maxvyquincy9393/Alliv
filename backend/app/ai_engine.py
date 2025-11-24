@@ -2,22 +2,45 @@
 AI Engine for Smart Matching and Recommendations
 """
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import openai
 import asyncio
 from datetime import datetime, timedelta
 import json
+from concurrent.futures import ProcessPoolExecutor
+import redis.asyncio as aioredis
+
+
+# Global worker function for ProcessPoolExecutor
+# This runs in child processes and initializes its own encoder
+def _encode_text_worker(text: str, model_name: str = 'all-MiniLM-L6-v2') -> np.ndarray:
+    """
+    Worker function that runs in a separate process.
+    Initializes its own SentenceTransformer to avoid pickling issues.
+    """
+    encoder = SentenceTransformer(model_name)
+    embedding = encoder.encode(text)
+    return embedding
 
 
 class CollabMatchAI:
     """AI-powered matching and recommendation engine"""
     
-    def __init__(self, openai_api_key: str = None):
+    def __init__(self, openai_api_key: str = None, redis_client: Optional[aioredis.Redis] = None):
         """Initialize AI models"""
-        # Sentence transformer for embeddings
+        # Sentence transformer for embeddings (kept for backward compatibility)
         self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model_name = 'all-MiniLM-L6-v2'
+        
+        # ProcessPoolExecutor for CPU-bound encoding tasks
+        # Using 4 workers for parallel processing without overwhelming the system
+        self.process_pool = ProcessPoolExecutor(max_workers=4)
+        
+        # Redis client for caching expensive AI operations
+        self.redis = redis_client
+        self.cache_ttl = 3600  # 1 hour cache TTL
         
         # OpenAI for advanced features
         if openai_api_key:
@@ -96,9 +119,77 @@ class CollabMatchAI:
         Experience: {user_profile.get('experience_level')}
         """
         
-        # Generate embedding
-        embedding = self.encoder.encode(text_representation)
+        # Generate embedding in a separate PROCESS to avoid blocking the event loop
+        # ProcessPoolExecutor bypasses Python's GIL for true CPU parallelism
+        loop = asyncio.get_running_loop()
+        embedding = await loop.run_in_executor(
+            self.process_pool,
+            _encode_text_worker,
+            text_representation,
+            self.model_name
+        )
         return embedding
+    
+    async def get_match_score_cached(
+        self,
+        user1_id: str,
+        user2_id: str,
+        user1: Dict,
+        user2: Dict,
+        use_ml: bool = True
+    ) -> Tuple[float, Dict[str, float], List[str]]:
+        """
+        Get match score with Redis caching to avoid recomputing expensive operations.
+        Cache key is deterministic (sorted user IDs) to ensure consistency.
+        
+        Args:
+            user1_id: First user's ID
+            user2_id: Second user's ID
+            user1: First user's profile data
+            user2: Second user's profile data
+            use_ml: Whether to use ML-based scoring
+            
+        Returns:
+            Tuple of (total_score, score_breakdown, match_reasons)
+        """
+        # Create deterministic cache key (sorted to ensure same key for A-B and B-A)
+        cache_key = f"match:{min(user1_id, user2_id)}:{max(user1_id, user2_id)}"
+        
+        # Try to get from cache if Redis is available
+        if self.redis:
+            try:
+                cached = await self.redis.get(cache_key)
+                if cached:
+                    result = json.loads(cached)
+                    # Convert lists back to proper types
+                    return (
+                        result['score'],
+                        result['breakdown'],
+                        result['reasons']
+                    )
+            except Exception as e:
+                # Log but don't fail on cache errors
+                pass
+        
+        # Cache miss or no Redis - compute the score
+        score, breakdown, reasons = await self.calculate_match_score(
+            user1, user2, use_ml
+        )
+        
+        # Store in cache if Redis is available
+        if self.redis:
+            try:
+                cache_value = json.dumps({
+                    'score': score,
+                    'breakdown': breakdown,
+                    'reasons': reasons
+                })
+                await self.redis.setex(cache_key, self.cache_ttl, cache_value)
+            except Exception as e:
+                # Log but don't fail on cache errors
+                pass
+        
+        return score, breakdown, reasons
     
     async def calculate_match_score(
         self, 
@@ -107,7 +198,9 @@ class CollabMatchAI:
         use_ml: bool = True
     ) -> Tuple[float, Dict[str, float], List[str]]:
         """
-        Calculate comprehensive match score between two users
+        Calculate comprehensive match score between two users.
+        This is the core computation method - use get_match_score_cached() for cached access.
+        
         Returns: (total_score, score_breakdown, match_reasons)
         """
         scores = {}

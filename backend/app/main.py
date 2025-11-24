@@ -69,13 +69,26 @@ logger.info("[OK] Prometheus metrics initialized")
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Socket.IO server
-sio = socketio.AsyncServer(
-    async_mode='asgi',
-    cors_allowed_origins=settings.CORS_ORIGIN.split(',') if settings.CORS_ORIGIN != "*" else "*",
-    logger=True,
-    engineio_logger=True
-)
+# Socket.IO server with Redis adapter for horizontal scalability
+try:
+    from socketio import AsyncRedisManager
+    
+    sio = socketio.AsyncServer(
+        async_mode='asgi',
+        client_manager=AsyncRedisManager(settings.REDIS_URL),
+        cors_allowed_origins=settings.CORS_ORIGIN.split(',') if settings.CORS_ORIGIN != "*" else "*",
+        logger=True,
+        engineio_logger=True
+    )
+    logger.info(f"[OK] Socket.IO initialized with Redis adapter: {settings.REDIS_URL}")
+except ImportError:
+    logger.warning("[WARN] AsyncRedisManager not available, falling back to in-memory Socket.IO")
+    sio = socketio.AsyncServer(
+        async_mode='asgi',
+        cors_allowed_origins=settings.CORS_ORIGIN.split(',') if settings.CORS_ORIGIN != "*" else "*",
+        logger=True,
+        engineio_logger=True
+    )
 
 
 @asynccontextmanager

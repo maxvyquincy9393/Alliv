@@ -17,7 +17,13 @@ async def init_db() -> AsyncIOMotorDatabase:
     global _client, _db
     
     try:
-        _client = AsyncIOMotorClient(settings.MONGO_URI)
+        _client = AsyncIOMotorClient(
+            settings.MONGO_URI,
+            maxPoolSize=50,
+            minPoolSize=10,
+            maxIdleTimeMS=45000,
+            serverSelectionTimeoutMS=5000
+        )
         # Test connection
         await _client.admin.command('ping')
         

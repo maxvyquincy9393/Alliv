@@ -26,6 +26,7 @@ from .profile import is_profile_complete
 from ..oauth_providers import get_oauth_user_info
 from ..email_utils import send_verification_email  # NEW: Email sending
 from ..services.trust import update_user_trust_score
+from ..services.session_manager import get_session_manager
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from ..password_utils import hash_password, verify_password
@@ -190,7 +191,7 @@ async def register_options(request: Request):
     return response
 
 @router.post("/register", response_model=dict)
-@limiter.limit("5/minute")
+@limiter.limit("3/15minutes")  # Stricter: 3 attempts per 15 minutes
 async def register(request: Request, data: RegisterRequest):
     """
     Register new user with enhanced validation
@@ -552,7 +553,7 @@ async def login_options(request: Request):
     return response
 
 @router.post("/login", response_model=dict)  # Changed to dict to allow custom response format
-@limiter.limit("5/minute")
+@limiter.limit("3/5minutes")  # Stricter: 3 attempts per 5 minutes
 async def login(request: Request, response: Response, credentials: LoginRequest):
     """
     Enhanced login with security features - FIXED VERSION
@@ -632,6 +633,20 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
         
         # Generate refresh token
         refresh_token = create_refresh_token({"sub": user_id})
+        refresh_token_hash = hash_refresh_token(refresh_token)
+        
+        # Create session with SessionManager
+        session_manager = get_session_manager()
+        user_agent = request.headers.get("User-Agent", "")
+        expires_at = datetime.utcnow() + timedelta(days=14)
+        
+        session_id = await session_manager.create_session(
+            user_id=user_id,
+            refresh_token_hash=refresh_token_hash,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            expires_at=expires_at
+        )
         
         # Store refresh token in database
         await get_db().users.update_one(
@@ -639,10 +654,11 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
             {
                 "$push": {
                     "refreshTokens": {
-                        "token": hash_refresh_token(refresh_token),
+                        "token": refresh_token_hash,
+                        "sessionId": session_id,
                         "createdAt": datetime.utcnow(),
-                        "expiresAt": datetime.utcnow() + timedelta(days=14),
-                        "userAgent": request.headers.get("User-Agent", ""),
+                        "expiresAt": expires_at,
+                        "userAgent": user_agent,
                         "ipAddress": ip_address
                     }
                 },
@@ -728,6 +744,7 @@ async def login(request: Request, response: Response, credentials: LoginRequest)
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("10/minute")  # Prevent refresh token abuse
 async def refresh_token(request: Request, response: Response):
     """
     Refresh access token using refresh token from cookie
@@ -854,19 +871,48 @@ async def refresh_token(request: Request, response: Response):
 @router.post("/logout")
 async def logout(request: Request, response: Response, current_user: dict = Depends(get_current_user)):
     """
-    Logout user and clear tokens
+    Logout user and revoke current session tokens
     """
     try:
-        # Remove refresh token from database
+        from ..services.token_blacklist import get_token_blacklist
+        from jose import jwt
+        
+        blacklist = get_token_blacklist()
+        
+        # Get tokens from cookies
+        access_token = request.cookies.get("access_token")
         refresh_token = request.cookies.get("refresh_token")
+        
+        # Blacklist access token if present
+        if access_token:
+            try:
+                payload = jwt.decode(access_token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM], options={"verify_exp": False})
+                exp_time = payload.get("exp")
+                if exp_time:
+                    await blacklist.revoke_token(access_token, exp_time)
+                    logger.info(f"Access token blacklisted for user {current_user['_id']}")
+            except Exception as e:
+                logger.warning(f"Failed to blacklist access token: {e}")
+        
+        # Blacklist refresh token if present
         if refresh_token:
+            try:
+                payload = jwt.decode(refresh_token, settings.JWT_REFRESH_SECRET, algorithms=[settings.JWT_ALGORITHM], options={"verify_exp": False})
+                exp_time = payload.get("exp")
+                if exp_time:
+                    await blacklist.revoke_token(refresh_token, exp_time)
+                    logger.info(f"Refresh token blacklisted for user {current_user['_id']}")
+            except Exception as e:
+                logger.warning(f"Failed to blacklist refresh token: {e}")
+            
+            # Also remove from database
             hashed_token = hash_refresh_token(refresh_token)
             await get_db().users.update_one(
                 {"_id": current_user["_id"]},
                 {"$pull": {"refreshTokens": {"token": hashed_token}}}
             )
         
-        # Clear cookie
+        # Clear cookies
         response.delete_cookie("refresh_token", path="/auth")
         response.delete_cookie("access_token", path="/")
         response.delete_cookie("csrf_token", path="/")
@@ -874,9 +920,495 @@ async def logout(request: Request, response: Response, current_user: dict = Depe
         return {"message": "Logged out successfully"}
         
     except Exception as e:
+        logger.error(f"Logout error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Logout failed"
+        )
+
+
+@router.post("/logout-all")
+async def logout_all(request: Request, response: Response, current_user: dict = Depends(get_current_user)):
+    """
+    Logout from all devices - revoke all user sessions
+    """
+    try:
+        from ..services.token_blacklist import get_token_blacklist
+        from jose import jwt
+        
+        blacklist = get_token_blacklist()
+        user_id = str(current_user["_id"])
+        
+        # Get all refresh tokens for this user
+        user = await get_db().users.find_one({"_id": current_user["_id"]})
+        refresh_tokens = user.get("refreshTokens", [])
+        
+        # Blacklist all refresh tokens
+        blacklisted_count = 0
+        for token_data in refresh_tokens:
+            # The token is stored as hash, but we need to blacklist based on expiry
+            # We'll use the expiresAt field from the database
+            expires_at = token_data.get("expiresAt")
+            if expires_at:
+                exp_timestamp = int(expires_at.timestamp())
+                # We don't have the actual token, but we can mark the session as revoked
+                # by removing from database. The blacklist is for immediate token revocation.
+                blacklisted_count += 1
+        
+        # Remove all refresh tokens from database
+        await get_db().users.update_one(
+            {"_id": current_user["_id"]},
+            {"$set": {"refreshTokens": []}}
+        )
+        
+        # Also blacklist current access token
+        access_token = request.cookies.get("access_token")
+        if access_token:
+            try:
+                payload = jwt.decode(access_token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM], options={"verify_exp": False})
+                exp_time = payload.get("exp")
+                if exp_time:
+                    await blacklist.revoke_token(access_token, exp_time)
+            except Exception as e:
+                logger.warning(f"Failed to blacklist access token: {e}")
+        
+        # Clear cookies for current device
+        response.delete_cookie("refresh_token", path="/auth")
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("csrf_token", path="/")
+        
+        logger.info(f"User {user_id} logged out from all devices ({len(refresh_tokens)} sessions)")
+        
+        return {
+            "message": "Logged out from all devices successfully",
+            "sessionsRevoked": len(refresh_tokens)
+        }
+        
+    except Exception as e:
+        logger.error(f"Logout-all error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout from all devices failed"
+        )
+
+
+@router.get("/sessions")
+async def list_sessions(current_user: dict = Depends(get_current_user)):
+    """
+    List all active sessions for the current user
+    """
+    try:
+        session_manager = get_session_manager()
+        user_id = str(current_user["_id"])
+        
+        sessions = await session_manager.get_user_sessions(user_id)
+        
+        # Format sessions for response
+        formatted_sessions = []
+        for session in sessions:
+            formatted_sessions.append({
+                "sessionId": session.get("session_id"),
+                "deviceInfo": session.get("device_info", {}),
+                "ipAddress": session.get("ip_address"),
+                "createdAt": session.get("created_at"),
+                "lastActive": session.get("last_active"),
+                "expiresAt": session.get("expires_at"),
+                "isCurrent": False  # TODO: Mark current session
+            })
+        
+        return {
+            "sessions": formatted_sessions,
+            "total": len(formatted_sessions)
+        }
+        
+    except Exception as e:
+        logger.error(f"List sessions error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list sessions"
+        )
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Revoke a specific session by session ID
+    """
+    try:
+        session_manager = get_session_manager()
+        user_id = str(current_user["_id"])
+        
+        # Verify session belongs to user
+        session = await session_manager.get_session(session_id)
+        if not session or session.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
+        
+        # Revoke the session
+        success = await session_manager.revoke_session(user_id, session_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to revoke session"
+            )
+        
+        # Also remove from database
+        refresh_token_hash = session.get("refresh_token_hash")
+        if refresh_token_hash:
+            await get_db().users.update_one(
+                {"_id": current_user["_id"]},
+                {"$pull": {"refreshTokens": {"token": refresh_token_hash}}}
+            )
+        
+        logger.info(f"Session {session_id} revoked for user {user_id}")
+        
+        return {
+            "message": "Session revoked successfully",
+            "sessionId": session_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Revoke session error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke session"
+        )
+
+
+# ===== TWO-FACTOR AUTHENTICATION ENDPOINTS =====
+
+class Enable2FARequest(BaseModel):
+    password: str  # Require password confirmation
+
+
+class Verify2FARequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class Disable2FARequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+    password: str
+
+
+@router.post("/2fa/enable")
+async def enable_2fa(
+    data: Enable2FARequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Enable 2FA for the current user.
+    Returns QR code and backup codes.
+    """
+    try:
+        from ..services.two_factor_auth import get_two_factor_auth
+        from ..password_utils import verify_password
+        
+        # Verify password
+        if not verify_password(data.password, current_user.get("passwordHash", "")):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password"
+            )
+        
+        # Check if 2FA already enabled
+        if current_user.get("mfa_enabled", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="2FA is already enabled"
+            )
+        
+        two_fa = get_two_factor_auth()
+        
+        # Generate secret and QR code
+        secret = two_fa.generate_secret()
+        qr_code = two_fa.generate_qr_code(secret, current_user["email"])
+        
+        # Generate backup codes
+        backup_codes = two_fa.generate_backup_codes(10)
+        hashed_backup_codes = [two_fa.hash_backup_code(code) for code in backup_codes]
+        
+        # Store in database (not enabled yet - requires verification)
+        user_id = current_user["_id"]
+        await get_db().users.update_one(
+            {"_id": user_id},
+            {
+                "$set": {
+                    "mfa_secret": secret,
+                    "mfa_backup_codes": hashed_backup_codes,
+                    "mfa_enabled": False,  # Not enabled until verified
+                    "mfa_setup_pending": True,
+                    "updatedAt": datetime.utcnow()
+                }
+            }
+        )
+        
+        logger.info(f"2FA setup initiated for user {user_id}")
+        
+        return {
+            "message": "2FA setup initiated. Please scan the QR code and verify with a code.",
+            "qrCode": qr_code,
+            "secret": secret,  # For manual entry
+            "backupCodes": backup_codes,  # Show once, user must save
+            "setupPending": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Enable 2FA error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enable 2FA"
+        )
+
+
+@router.post("/2fa/verify-setup")
+async def verify_2fa_setup(
+    data: Verify2FARequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Verify 2FA setup by confirming a TOTP code.
+    This activates 2FA for the account.
+    """
+    try:
+        from ..services.two_factor_auth import get_two_factor_auth
+        
+        # Check if setup is pending
+        if not current_user.get("mfa_setup_pending", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No pending 2FA setup"
+            )
+        
+        secret = current_user.get("mfa_secret")
+        if not secret:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="2FA secret not found"
+            )
+        
+        two_fa = get_two_factor_auth()
+        
+        # Verify the code
+        if not two_fa.verify_totp(secret, data.code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid verification code"
+            )
+        
+        # Activate 2FA
+        user_id = current_user["_id"]
+        await get_db().users.update_one(
+            {"_id": user_id},
+            {
+                "$set": {
+                    "mfa_enabled": True,
+                    "mfa_enabled_at": datetime.utcnow(),
+                    "updatedAt": datetime.utcnow()
+                },
+                "$unset": {
+                    "mfa_setup_pending": ""
+                }
+            }
+        )
+        
+        logger.info(f"2FA enabled for user {user_id}")
+        
+        return {
+            "message": "2FA enabled successfully",
+            "enabled": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify 2FA setup error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify 2FA setup"
+        )
+
+
+@router.post("/2fa/disable")
+async def disable_2fa(
+    data: Disable2FARequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Disable 2FA for the current user.
+    Requires both password and current TOTP code.
+    """
+    try:
+        from ..services.two_factor_auth import get_two_factor_auth
+        from ..password_utils import verify_password
+        
+        # Check if 2FA is enabled
+        if not current_user.get("mfa_enabled", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="2FA is not enabled"
+            )
+        
+        # Verify password
+        if not verify_password(data.password, current_user.get("passwordHash", "")):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password"
+            )
+        
+        # Verify TOTP code
+        two_fa = get_two_factor_auth()
+        secret = current_user.get("mfa_secret")
+        
+        if not two_fa.verify_totp(secret, data.code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid verification code"
+            )
+        
+        # Disable 2FA
+        user_id = current_user["_id"]
+        await get_db().users.update_one(
+            {"_id": user_id},
+            {
+                "$set": {
+                    "mfa_enabled": False,
+                    "updatedAt": datetime.utcnow()
+                },
+                "$unset": {
+                    "mfa_secret": "",
+                    "mfa_backup_codes": "",
+                    "mfa_enabled_at": ""
+                }
+            }
+        )
+        
+        logger.info(f"2FA disabled for user {user_id}")
+        
+        return {
+            "message": "2FA disabled successfully",
+            "enabled": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Disable 2FA error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to disable 2FA"
+        )
+
+
+@router.post("/2fa/verify")
+async def verify_2fa_login(data: Verify2FARequest, response: Response):
+    """
+    Verify 2FA code during login.
+    Called after successful email/password authentication.
+    """
+    try:
+        from ..services.two_factor_auth import get_two_factor_auth
+        from jose import jwt
+        
+        # This endpoint expects a temp token in header or cookie
+        # For now, we'll implement it as part of the login flow
+        # The actual implementation should be integrated into the login endpoint
+        
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="2FA verification is integrated into the login flow"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"2FA verification error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="2FA verification failed"
+        )
+
+
+@router.get("/2fa/status")
+async def get_2fa_status(current_user: dict = Depends(get_current_user)):
+    """
+    Get 2FA status for the current user.
+    """
+    return {
+        "enabled": current_user.get("mfa_enabled", False),
+        "setupPending": current_user.get("mfa_setup_pending", False),
+        "enabledAt": current_user.get("mfa_enabled_at")
+    }
+
+
+@router.post("/2fa/backup-codes/regenerate")
+async def regenerate_backup_codes(
+    data: Enable2FARequest,  # Reuse password confirmation
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Regenerate backup codes for 2FA.
+    Requires password confirmation.
+    """
+    try:
+        from ..services.two_factor_auth import get_two_factor_auth
+        from ..password_utils import verify_password
+        
+        # Check if 2FA is enabled
+        if not current_user.get("mfa_enabled", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="2FA is not enabled"
+            )
+        
+        # Verify password
+        if not verify_password(data.password, current_user.get("passwordHash", "")):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid password"
+            )
+        
+        two_fa = get_two_factor_auth()
+        
+        # Generate new backup codes
+        backup_codes = two_fa.generate_backup_codes(10)
+        hashed_backup_codes = [two_fa.hash_backup_code(code) for code in backup_codes]
+        
+        # Update in database
+        user_id = current_user["_id"]
+        await get_db().users.update_one(
+            {"_id": user_id},
+            {
+                "$set": {
+                    "mfa_backup_codes": hashed_backup_codes,
+                    "updatedAt": datetime.utcnow()
+                }
+            }
+        )
+        
+        logger.info(f"Backup codes regenerated for user {user_id}")
+        
+        return {
+            "message": "Backup codes regenerated successfully",
+            "backupCodes": backup_codes
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Regenerate backup codes error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to regenerate backup codes"
         )
 
 

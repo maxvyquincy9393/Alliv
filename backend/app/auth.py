@@ -10,6 +10,7 @@ from bson import ObjectId
 from .config import settings
 from .db import users
 from .password_utils import hash_password, verify_password
+from .services.token_blacklist import get_token_blacklist
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -48,18 +49,30 @@ def hash_refresh_token(token: str) -> str:
     ).hexdigest()
 
 
-def verify_access_token(token: str) -> Optional[dict]:
-    """Verify and decode access token"""
+async def verify_access_token(token: str) -> Optional[dict]:
+    """Verify and decode access token with blacklist check"""
     try:
+        # Check if token is blacklisted
+        blacklist = get_token_blacklist()
+        if await blacklist.is_revoked(token):
+            logger.warning("Attempted use of blacklisted token")
+            return None
+        
         payload = jwt.decode(token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM])
         return payload
     except JWTError:
         return None
 
 
-def verify_refresh_token(token: str) -> Optional[dict]:
-    """Verify and decode refresh token"""
+async def verify_refresh_token(token: str) -> Optional[dict]:
+    """Verify and decode refresh token with blacklist check"""
     try:
+        # Check if token is blacklisted
+        blacklist = get_token_blacklist()
+        if await blacklist.is_revoked(token):
+            logger.warning("Attempted use of blacklisted refresh token")
+            return None
+        
         payload = jwt.decode(token, settings.JWT_REFRESH_SECRET, algorithms=[settings.JWT_ALGORITHM])
         if payload.get("type") != "refresh":
             return None
@@ -93,6 +106,12 @@ async def get_current_user(
     #     return await _fetch_user_by_id(token, credentials_exception)
     
     try:
+        # Check if token is blacklisted first
+        blacklist = get_token_blacklist()
+        if await blacklist.is_revoked(token):
+            logger.warning("Attempted use of blacklisted token")
+            raise credentials_exception
+        
         payload = jwt.decode(token, settings.JWT_ACCESS_SECRET, algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
         # logger.debug(f"[SEARCH] Token decoded successfully, user_id: {user_id}")
