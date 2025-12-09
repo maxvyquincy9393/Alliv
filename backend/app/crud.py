@@ -2,6 +2,7 @@ from . import db
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from bson import ObjectId
 
 
 async def create_user(user_data: dict) -> dict:
@@ -27,55 +28,84 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
 
 async def compute_match_candidates(user: dict, limit: int = 20) -> List[dict]:
     """
-    Compute match candidates using rule-based scoring:
+    Compute match candidates using scalable MongoDB Aggregation Pipeline.
     - Shared skills: +0.2 per skill
     - Same project interest: +0.5
     - Different role (complementary): +0.3
     """
-    # Get all users except current user
-    cursor = db.users().find({"_id": {"$ne": user["_id"]}})
-    pool = await cursor.to_list(length=500)
-    
-    # Get already liked users
-    liked_cursor = db.likes().find({"from": user["_id"]})
-    liked_ids = set([like["to"] async for like in liked_cursor])
-    
-    results = []
-    user_skills = set(user.get("skills", []))
+    user_id = user["_id"]
+    user_skills = user.get("skills", [])
     user_interest = user.get("project_interest", "")
     user_role = user.get("role", "")
-    
-    for candidate in pool:
-        # Skip if already liked
-        if candidate["_id"] in liked_ids:
-            continue
-        
-        score = 0.0
-        
-        # Shared skills
-        candidate_skills = set(candidate.get("skills", []))
-        shared_skills = user_skills & candidate_skills
-        score += len(shared_skills) * 0.2
-        
-        # Same project interest
-        if user_interest == candidate.get("project_interest", ""):
-            score += 0.5
-        
-        # Complementary role
-        if user_role != candidate.get("role", ""):
-            score += 0.3
-        
-        # Behavior score factor
-        score *= candidate.get("behavior_score", 0.8)
-        
-        results.append((candidate, score))
-    
-    # Sort by score descending
-    results.sort(key=lambda x: x[1], reverse=True)
-    
-    # Return top N candidates
-    top_candidates = [r[0] for r in results[:limit]]
-    return top_candidates
+
+    # Get already liked users (using correct schema fields: userId/targetId)
+    # db.likes() is alias for db.swipes()
+    liked_cursor = db.likes().find({"userId": user_id})
+    liked_ids = [like["targetId"] async for like in liked_cursor]
+
+    pipeline = [
+        # 1. Filter: Exclude self and already swiped users
+        {
+            "$match": {
+                "_id": {
+                    "$ne": user_id,
+                    "$nin": liked_ids
+                }
+            }
+        },
+        # 2. Calculate Scores using projection/addFields
+        {
+            "$addFields": {
+                "shared_skills_count": {
+                    "$size": {
+                        "$setIntersection": [
+                            {"$ifNull": ["$skills", []]}, 
+                            user_skills
+                        ]
+                    }
+                },
+                "same_interest_score": {
+                    "$cond": [
+                        {"$eq": [{"$ifNull": ["$project_interest", ""]}, user_interest]}, 
+                        0.5, 
+                        0
+                    ]
+                },
+                "diff_role_score": {
+                    "$cond": [
+                        {"$ne": [{"$ifNull": ["$role", ""]}, user_role]}, 
+                        0.3, 
+                        0
+                    ]
+                },
+                "behavior_score": {"$ifNull": ["$behavior_score", 0.8]}
+            }
+        },
+        # 3. Compute Final Score
+        {
+            "$addFields": {
+                "score": {
+                    "$multiply": [
+                        {
+                            "$add": [
+                                {"$multiply": ["$shared_skills_count", 0.2]},
+                                "$same_interest_score",
+                                "$diff_role_score"
+                            ]
+                        },
+                        "$behavior_score"
+                    ]
+                }
+            }
+        },
+        # 4. Sort by score descending
+        {"$sort": {"score": -1}},
+        # 5. Limit results
+        {"$limit": limit}
+    ]
+
+    cursor = db.users().aggregate(pipeline)
+    return await cursor.to_list(length=limit)
 
 
 
@@ -83,8 +113,8 @@ async def create_message(match_id: str, sender_id: str, content: str) -> dict:
     """Create a new message"""
     message_doc = {
         "_id": f"msg::{str(uuid.uuid4())}",
-        "match_id": match_id,
-        "sender": sender_id,
+        "match_id": str(match_id),
+        "sender": str(sender_id),
         "content": content,
         "created_at": datetime.utcnow()
     }
@@ -102,7 +132,13 @@ async def get_match_messages(match_id: str, limit: int = 100) -> List[dict]:
 
 async def verify_user_in_match(match_id: str, user_id: str) -> bool:
     """Verify that a user is part of a match"""
-    match = await db.matches().find_one({"_id": match_id})
-    if not match:
+    try:
+        match_query = {"_id": ObjectId(match_id)} if ObjectId.is_valid(match_id) else {"_id": match_id}
+        match = await db.matches().find_one(match_query)
+        if not match:
+            return False
+
+        user_ids = [str(uid) for uid in match.get("users", [])]
+        return str(user_id) in user_ids
+    except Exception:
         return False
-    return user_id in match["users"]

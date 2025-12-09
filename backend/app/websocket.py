@@ -1,6 +1,6 @@
 from fastapi import WebSocket, WebSocketDisconnect, Query
 from typing import Dict, Set
-from .auth import decode_token
+from .auth import verify_access_token
 from .crud import create_message, verify_user_in_match, get_user_by_id
 import json
 from datetime import datetime
@@ -51,7 +51,7 @@ async def websocket_endpoint(websocket: WebSocket, match_id: str, token: str = Q
     URL: /ws/{match_id}?token=<jwt_token>
     """
     # Validate token
-    payload = decode_token(token)
+    payload = await verify_access_token(token)
     if not payload:
         await websocket.close(code=1008, reason="Invalid token")
         return

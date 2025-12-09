@@ -13,7 +13,7 @@ interface CreatePostModalProps {
 
 const POST_TYPES: { value: PostType; label: string; description: string }[] = [
     {
-        value: 'update', label: 'Update', description: 'Share what you're working on' },
+        value: 'update', label: 'Update', description: 'Share what you\'re working on' },
   { value: 'showcase', label: 'Showcase', description: 'Show off your work' },
   { value: 'collaboration', label: 'Collaboration', description: 'Find collaborators' },
     { value: 'milestone', label: 'Milestone', description: 'Celebrate achievements' },

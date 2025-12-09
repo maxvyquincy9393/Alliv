@@ -3,19 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FullScreenLayout } from '../components/FullScreenLayout';
 import { useAuth } from '../hooks/useAuth';
-import {
-  Calendar,
-  MapPin,
-  Clock,
-  Users,
-  Plus,
-  Search,
-  Filter,
-  Wifi,
+import { 
+  Calendar, 
+  MapPin, 
+  Clock, 
+  Search, 
+  Plus, 
   Share2,
+  Wifi,
   Bookmark
-} from 'lucide-react';
-import type { Event, EventCategory } from '../types/event';
+} from 'lucide-react';import type { Event, EventCategory } from '../types/event';
 
 // Extended Event type for the mock data with images
 interface ExtendedEvent extends Event {

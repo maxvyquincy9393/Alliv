@@ -14,11 +14,12 @@ import re
 from ..db import get_db
 from ..auth import get_current_user
 from ..services.trust import update_user_trust_score
+from ..services.moderation import moderation_service
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Profile"])
+router = APIRouter(prefix="/profile", tags=["Profile"])
 
 
 def is_profile_complete(profile: Dict[str, Any]) -> bool:
@@ -63,6 +64,7 @@ class Portfolio(BaseModel):
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
+    role: Optional[str] = None
     age: Optional[int] = None
     bio: Optional[str] = None
     goals: Optional[str] = None
@@ -92,6 +94,14 @@ class ProfileUpdate(BaseModel):
             v = v.strip()
             if len(v) > 500:
                 raise ValueError("Bio must be max 500 characters")
+        return v
+
+    @validator('role')
+    def validate_role(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) < 2 or len(v) > 100:
+                raise ValueError("Role must be 2-100 characters")
         return v
     
     @validator('goals')
@@ -180,11 +190,27 @@ async def update_current_profile(
         update_data = {}
         if data.name:
             update_data["name"] = data.name.strip()  # [OK] Sanitized
+        if data.role:
+            update_data["role"] = data.role.strip()
         if data.age:
             update_data["age"] = data.age
         if data.bio:
+            # Content moderation for bio
+            mod_result = await moderation_service.check_text(data.bio)
+            if mod_result["flagged"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Bio contains inappropriate content: {mod_result['reason']}"
+                )
             update_data["bio"] = data.bio.strip()  # [OK] Sanitized
         if data.goals:
+            # Content moderation for goals
+            mod_result = await moderation_service.check_text(data.goals)
+            if mod_result["flagged"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Goals contains inappropriate content: {mod_result['reason']}"
+                )
             update_data["goals"] = data.goals.strip()  # [OK] Sanitized
         if data.field:
             update_data["field"] = data.field.strip()
@@ -221,8 +247,10 @@ async def update_current_profile(
 
         # Determine if this update satisfies completion requirements
         merged_profile = {**existing_profile, **update_data}
-        if is_profile_complete(merged_profile):
-            update_data["profileComplete"] = True
+        is_complete = is_profile_complete(merged_profile)
+        update_data["profileComplete"] = is_complete
+        
+        if is_complete:
             update_data["completionScore"] = 100
         
         # [OK] Upsert profile with error handling
@@ -232,8 +260,7 @@ async def update_current_profile(
                 "$set": update_data,
                 "$setOnInsert": {
                     "userId": user_id,
-                    "createdAt": datetime.utcnow(),
-                    "profileComplete": True
+                    "createdAt": datetime.utcnow()
                 }
             },
             upsert=True  # Create if doesn't exist

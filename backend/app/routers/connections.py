@@ -172,7 +172,7 @@ async def get_connections(
     Get user's connections with filtering and sorting options
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         user_id = str(current_user["_id"])
@@ -287,7 +287,7 @@ async def create_connection(
     Create a new connection
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         user_id = str(current_user["_id"])
@@ -386,7 +386,7 @@ async def update_connection(
     Update an existing connection
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         user_id = str(current_user["_id"])
@@ -471,7 +471,7 @@ async def delete_connection(
     Delete a connection
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         user_id = str(current_user["_id"])
         
@@ -515,7 +515,7 @@ async def get_connection_stats(
     Get connection statistics and analytics
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         user_id = str(current_user["_id"])
@@ -629,7 +629,7 @@ async def get_mutual_connections_with_user(
     Get mutual connections with a specific user
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         current_user_id = str(current_user["_id"])
@@ -696,7 +696,7 @@ async def export_connections(
     Export connections data in CSV or JSON format
     """
     try:
-        db = await get_db()
+        db = get_db()
         connections_collection = db.connections
         users_collection = db.users
         user_id = str(current_user["_id"])

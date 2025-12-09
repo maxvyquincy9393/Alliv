@@ -271,7 +271,7 @@ async def get_match_insights(
     Get AI-generated insights for a specific user match
     """
     try:
-        db = await get_db()
+        db = get_db()
         users_collection = db.users
         
         # Get target user
@@ -543,7 +543,7 @@ async def submit_insights_feedback(
     Submit feedback on AI insights quality for improvement
     """
     try:
-        db = await get_db()
+        db = get_db()
         feedback_collection = db.insights_feedback
         
         feedback_doc = {

@@ -19,6 +19,7 @@ from .integrations.sentry import init_sentry, capture_exception
 from .integrations.metrics import init_metrics, PrometheusMiddleware
 from . import testclient_compat
 from .db import init_db, close_db
+from .db_indexes import create_indexes as create_db_indexes
 
 # Consolidated Router Imports
 from .routers import (
@@ -91,6 +92,11 @@ except ImportError:
     )
 
 
+async def create_indexes():
+    """Create database indexes (separated for easy patching in tests)."""
+    await create_db_indexes()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
@@ -99,7 +105,6 @@ async def lifespan(app: FastAPI):
     logger.info("[OK] Database connected")
     
     # Create indexes for performance
-    from .db_indexes import create_indexes
     await create_indexes()
     
     yield

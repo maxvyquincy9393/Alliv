@@ -3,6 +3,7 @@ from pydantic import validator
 from ..auth import get_current_user
 from ..crud import get_match_messages, create_message, verify_user_in_match
 from ..models import MessageCreate, MessageResponse
+from ..services.moderation import moderation_service
 from typing import List
 from bson import ObjectId
 from pymongo.errors import PyMongoError
@@ -18,7 +19,7 @@ rate_limit_store = defaultdict(list)
 RATE_LIMIT_MESSAGES = 30  # messages per minute
 RATE_LIMIT_WINDOW = 60  # seconds
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(tags=["Chat"])
 
 
 @router.get("/{match_id}/messages", response_model=List[MessageResponse])
@@ -106,7 +107,7 @@ async def send_message(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Send a message with rate limiting, validation, and error handling
+    Send a message with rate limiting, validation, moderation, and error handling
     """
     try:
         # [OK] Validate match_id format
@@ -137,6 +138,15 @@ async def send_message(
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Rate limit exceeded. Maximum {RATE_LIMIT_MESSAGES} messages per minute."
+            )
+
+        # [NEW] Content Moderation
+        moderation_result = await moderation_service.check_text(content)
+        if moderation_result["flagged"]:
+            logger.warning(f"Blocked message from user {current_user['_id']}: {moderation_result['reason']}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Message blocked: {moderation_result['reason']}"
             )
         
         # [OK] Verify user is part of this match

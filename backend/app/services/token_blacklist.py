@@ -33,7 +33,8 @@ class TokenBlacklist:
     
     async def _get_redis_client(self) -> Optional[redis.Redis]:
         """Get Redis client with connection check"""
-        if not settings.REDIS_URL:
+        # In test environments, force memory fallback to avoid external deps
+        if settings.NODE_ENV == "test" or not settings.REDIS_URL:
             return None
         
         try:

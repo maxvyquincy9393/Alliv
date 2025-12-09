@@ -1,7 +1,8 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { profileAPI, ProfileUpdate } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import { FullScreenLayout } from '../components/FullScreenLayout';
 import { Loader2, Plus, X, Sparkles, ChevronRight, Check, ChevronLeft } from 'lucide-react';
 
@@ -37,6 +38,7 @@ const SUGGESTED_INTERESTS = [
 
 export const SetupProfile = () => {
   const navigate = useNavigate();
+  const { setAuthUser, user } = useAuth();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [birthdate, setBirthdate] = useState('');
@@ -49,6 +51,18 @@ export const SetupProfile = () => {
   const [interestInput, setInterestInput] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.name) setName(user.name);
+      if (user.bio) setBio(user.bio);
+      if (user.skills?.length) setSkills(user.skills);
+      if (user.interests?.length) setInterests(user.interests);
+      if (user.photos?.length) setPhotos(user.photos);
+      // Access goals safely if it exists on user object
+      if ((user as any).goals) setGoals((user as any).goals);
+    }
+  }, [user]);
 
   const addSkill = (value?: string) => {
     const skillToAdd = value || skillInput;
@@ -92,18 +106,38 @@ export const SetupProfile = () => {
 
   const prevStep = () => setStep(step - 1);
 
+  const calculateAge = (birthDateString: string) => {
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!photos.length) return setError('Upload at least one photo.');
+    if (!birthdate) return setError('Please enter your birthdate.');
 
     setLoading(true);
 
     try {
+      const age = calculateAge(birthdate);
+
+      if (age < 18) {
+        setError('You must be at least 18 years old to use this platform.');
+        setLoading(false);
+        return;
+      }
+
       const payload: ProfileUpdate = {
         name: name.trim(),
-        age: new Date().getFullYear() - new Date(birthdate).getFullYear(),
+        age: age,
         bio: bio.trim(),
         skills,
         interests,
@@ -122,12 +156,27 @@ export const SetupProfile = () => {
         return;
       }
 
-      navigate('/discover');
+      if (updateResponse.data) {
+        if (!updateResponse.data.profileComplete) {
+           setError('Profile saved but marked as incomplete. Please ensure all required fields are filled and valid (Age 18+, Bio, etc.).');
+           setLoading(false);
+           return;
+        }
+
+        if (user) {
+          setAuthUser({ ...user, ...updateResponse.data });
+        }
+        navigate('/discover');
+      } else {
+         // Fallback if no data
+         setError('Failed to update profile. No data returned.');
+         setLoading(false);
+      }
+
     } catch (err: any) {
       console.error('Profile update failed:', err);
       const errorMsg = typeof err === 'string' ? err : err?.message || 'Failed to update profile. Please try again.';
       setError(errorMsg);
-    } finally {
       setLoading(false);
     }
   };

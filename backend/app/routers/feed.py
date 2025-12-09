@@ -88,7 +88,7 @@ async def get_feed(
     Get community feed with filtering and pagination
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         
         # Build query
@@ -165,7 +165,7 @@ async def create_post(
     Create a new feed post
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         
         # Prepare post document
@@ -245,7 +245,7 @@ async def update_post(
     Update an existing post (author only)
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         
         # Check if post exists and user is author
@@ -308,7 +308,7 @@ async def delete_post(
     Delete a post (author only)
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         
         # Check if post exists and user is author
@@ -350,7 +350,7 @@ async def engage_with_post(
     Like, bookmark, or share a post
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         user_id = str(current_user["_id"])
         
@@ -414,7 +414,7 @@ async def get_post_comments(
     Get comments for a post
     """
     try:
-        db = await get_db()
+        db = get_db()
         comments_collection = db.comments
         user_id = str(current_user["_id"])
         
@@ -463,7 +463,7 @@ async def create_comment(
     Create a comment on a post
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         comments_collection = db.comments
         
@@ -527,7 +527,7 @@ async def get_trending_tags(
     Get trending hashtags from recent posts
     """
     try:
-        db = await get_db()
+        db = get_db()
         posts_collection = db.posts
         
         # Get posts from last 7 days

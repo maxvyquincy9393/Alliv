@@ -13,6 +13,9 @@ from concurrent.futures import ProcessPoolExecutor
 import redis.asyncio as aioredis
 
 
+# Global cache for worker process
+_worker_encoder = None
+
 # Global worker function for ProcessPoolExecutor
 # This runs in child processes and initializes its own encoder
 def _encode_text_worker(text: str, model_name: str = 'all-MiniLM-L6-v2') -> np.ndarray:
@@ -20,8 +23,11 @@ def _encode_text_worker(text: str, model_name: str = 'all-MiniLM-L6-v2') -> np.n
     Worker function that runs in a separate process.
     Initializes its own SentenceTransformer to avoid pickling issues.
     """
-    encoder = SentenceTransformer(model_name)
-    embedding = encoder.encode(text)
+    global _worker_encoder
+    if _worker_encoder is None:
+        _worker_encoder = SentenceTransformer(model_name)
+        
+    embedding = _worker_encoder.encode(text)
     return embedding
 
 
@@ -31,7 +37,7 @@ class CollabMatchAI:
     def __init__(self, openai_api_key: str = None, redis_client: Optional[aioredis.Redis] = None):
         """Initialize AI models"""
         # Sentence transformer for embeddings (kept for backward compatibility)
-        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        # Removed blocking self.encoder initialization - using process pool instead
         self.model_name = 'all-MiniLM-L6-v2'
         
         # ProcessPoolExecutor for CPU-bound encoding tasks

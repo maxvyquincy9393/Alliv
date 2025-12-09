@@ -18,7 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import type { Post, Industry, PostType, FeedParams } from '../types/post';
+import type { Post, PostType, FeedParams } from '../types/post';
 import api from '../services/api';
 
 interface CommunityFeedProps {
@@ -33,13 +33,12 @@ export const CommunityFeed = ({ onCreatePost, refreshTrigger = 0 }: CommunityFee
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'following' | 'trending' | 'industry'>('all');
-  const [selectedIndustry, setSelectedIndustry] = useState<Industry | 'all'>('all');
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
 
   useEffect(() => {
     loadPosts();
-  }, [filter, selectedIndustry, refreshTrigger]);
+  }, [filter, refreshTrigger]);
 
   const loadPosts = async () => {
     setLoading(true);
@@ -51,10 +50,6 @@ export const CommunityFeed = ({ onCreatePost, refreshTrigger = 0 }: CommunityFee
         offset: 0,
         filter_type: filter,
       };
-
-      if (filter === 'industry' && selectedIndustry !== 'all') {
-        params.industry = selectedIndustry;
-      }
 
       const response = await api.feed.getFeed(params);
 

@@ -23,7 +23,7 @@ export const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [filter, setFilter] = useState<Project['status'] | 'all'>('all');
+  const [filter] = useState<Project['status'] | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {

@@ -363,14 +363,14 @@ export const profileAPI = {
    * Get current user profile
    */
   getMe: async () => {
-    return fetchAPI('/me');
+    return fetchAPI('/profile/me');
   },
 
   /**
    * Update current user profile
    */
   updateMe: async (data: ProfileUpdate) => {
-    return fetchAPI('/me', {
+    return fetchAPI('/profile/me', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -380,7 +380,7 @@ export const profileAPI = {
    * Update profile photos
    */
   updatePhotos: async (photos: string[]) => {
-    return fetchAPI('/me/photos', {
+    return fetchAPI('/profile/me/photos', {
       method: 'PUT',
       body: JSON.stringify({ photos }),
     });
@@ -390,7 +390,7 @@ export const profileAPI = {
    * Get user profile by ID
    */
   getProfile: async (userId: string) => {
-    return fetchAPI(`/profiles/${userId}`);
+    return fetchAPI(`/profile/profiles/${userId}`);
   },
 };
 

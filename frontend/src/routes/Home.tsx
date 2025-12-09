@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Star, Undo2, X, Sparkles } from 'lucide-react';
+import { Heart, MessageCircle, Star, Undo2, X, Sparkles, Zap } from 'lucide-react';
 import { FullScreenLayout } from '../components/FullScreenLayout';
 import { SwipeCard } from '../components/SwipeCard';
 import { MatchModal } from '../components/MatchModal';
 import { useSwipe } from '../hooks/useSwipe';
 import { useAuth } from '../hooks/useAuth';
-import { theme } from '../styles/theme';
 import { AIInsightsPanel } from '../components/AIInsightsPanel';
 
 export const Home = () => {
@@ -84,72 +83,81 @@ export const Home = () => {
 
   return (
     <FullScreenLayout>
-      <div className="absolute right-6 top-6 z-20 flex gap-3">
-        <motion.button
-          type="button"
-          whileHover={{ scale: currentUser ? 1.03 : 1 }}
-          whileTap={{ scale: currentUser ? 0.97 : 1 }}
-          onClick={() => currentUser && setInsightsOpen(true)}
-          disabled={!currentUser}
-          className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white/90 backdrop-blur hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          AI Insights
-        </motion.button>
-      </div>
-
-      <div className="relative flex flex-1 items-center justify-center px-4 py-8">
-        {loading ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center gap-6"
-          >
-            <div className="relative">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                className="h-16 w-16 rounded-full border-4 border-t-transparent border-b-transparent border-l-blue-500 border-r-purple-500"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="h-6 w-6 text-white/70" />
-              </div>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-semibold text-white">Finding matches</p>
-              <p className="text-sm text-white/60">Preparing your personalized feed...</p>
-            </div>
-          </motion.div>
-        ) : noMoreUsers ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex max-w-md flex-col items-center gap-6 text-center"
-          >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#FFEC3D] to-[#FFD700] rounded-full blur-2xl opacity-30" />
-              <div className="relative rounded-full bg-gradient-to-br from-white/10 to-white/5 p-8 backdrop-blur-xl border border-white/10">
-                <Star className="h-16 w-16" style={{ color: theme.colors.primary.yellow }} />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-3xl font-bold text-white">All caught up!</h2>
-              <p className="text-white/60 max-w-sm">
-                You've seen all available profiles. Check back later or adjust your preferences.
-              </p>
-            </div>
+      {/* Top Bar Controls */}
+      <div className="absolute top-0 left-0 right-0 z-20 p-6 flex justify-between items-start pointer-events-none">
+         <div className="pointer-events-auto flex gap-3">
+             {/* Potential Left Side Controls (Filters etc) */}
+         </div>
+         
+         <div className="pointer-events-auto">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => currentUser && setInsightsOpen(true)}
+              disabled={!currentUser}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/40 border border-white/10 backdrop-blur-md text-sm font-medium text-white/80 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4 text-blue-400" />
+              <span>AI Insights</span>
+            </motion.button>
+         </div>
+      </div>
+
+      <div className="relative flex flex-1 flex-col items-center justify-center w-full h-full overflow-hidden">
+        
+        {/* Ambient Background Glow */}
+        <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[100px]" />
+        </div>
+
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="relative z-10 flex flex-col items-center gap-6"
+          >
+            <div className="w-16 h-16 rounded-full border-2 border-white/10 border-t-blue-500 animate-spin" />
+            <p className="text-sm text-white/40 tracking-widest uppercase">Locating Talent...</p>
+          </motion.div>
+        ) : noMoreUsers ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative z-10 flex flex-col items-center text-center max-w-md px-6"
+          >
+            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10">
+               <Sparkles className="w-8 h-8 text-blue-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">You're all caught up</h2>
+            <p className="text-white/50 mb-8 leading-relaxed">
+               You've seen all the profiles in your area for now. <br/> Check back later for new matches.
+            </p>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={loadUsers}
-              className="btn-primary px-8 py-4 rounded-full"
+              className="px-8 py-3 rounded-full bg-white text-black font-medium text-sm hover:bg-blue-50 transition-colors"
             >
               Refresh Feed
             </motion.button>
           </motion.div>
         ) : (
-          <div className="relative w-full max-w-[420px]">
+          <div className="relative w-full max-w-[400px] flex flex-col items-center z-10">
+            
+            {/* Stats Pills (Floating above card) */}
+            <div className="flex gap-3 mb-4 opacity-80 hover:opacity-100 transition-opacity">
+                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 border border-white/10 backdrop-blur-sm text-[10px] font-medium text-white/60">
+                    <Zap className="w-3 h-3 text-blue-400" />
+                    <span>{swipesRemaining} left</span>
+                 </div>
+                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 border border-white/10 backdrop-blur-sm text-[10px] font-medium text-white/60">
+                    <Star className="w-3 h-3 text-yellow-400" />
+                    <span>{superLikesRemaining} super</span>
+                 </div>
+            </div>
+
             {/* Card Stack */}
-            <div className="relative min-h-[580px]">
+            <div className="relative w-full h-[600px]">
               <AnimatePresence initial={false}>
                 {users
                   .slice(currentIndex, currentIndex + 3)
@@ -164,105 +172,68 @@ export const Home = () => {
                       style={{
                         zIndex: 3 - index,
                         scale: 1 - index * 0.04,
-                        top: index * 18,
+                        top: index * 10, // Tighter stacking
                       }}
                     />
                   ))}
               </AnimatePresence>
 
-              {/* Feedback Toast */}
+              {/* Feedback Overlay */}
               <AnimatePresence>
                 {feedback && (
                   <motion.div
                     key={feedback.id}
-                    initial={{ opacity: 0, y: 20, scale: 0.8 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -20, scale: 0.8 }}
-                    className="pointer-events-none absolute left-1/2 top-8 -translate-x-1/2 z-50"
+                    initial={{ opacity: 0, scale: 0.5, y: 0 }}
+                    animate={{ opacity: 1, scale: 1, y: -50 }}
+                    exit={{ opacity: 0, scale: 1.2 }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50"
                   >
-                    <div
-                      className="px-8 py-3 rounded-full text-lg font-bold shadow-2xl"
-                      style={{
-                        background: feedback.type === 'pass'
-                          ? `linear-gradient(135deg, #EF4444 0%, #DC2626 100%)`
-                          : feedback.type === 'like'
-                            ? theme.gradients.button
-                            : `linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`,
-                        color: feedback.type === 'super' ? '#000' : '#fff',
-                        boxShadow: `0 20px 40px ${feedback.type === 'pass' ? '#EF444440' : feedback.type === 'like' ? theme.colors.primary.purple + '40' : theme.colors.primary.yellow + '40'}`
-                      }}
-                    >
-                      {feedback.type === 'pass' ? 'NOPE' : feedback.type === 'like' ? 'LIKE' : 'SUPER LIKE!'}
-                    </div>
+                     <div className={`px-6 py-2 rounded-xl border-2 text-xl font-black tracking-widest uppercase backdrop-blur-md shadow-2xl
+                        ${feedback.type === 'pass' ? 'border-red-500/50 bg-red-500/20 text-red-400' : 
+                          feedback.type === 'like' ? 'border-green-500/50 bg-green-500/20 text-green-400' : 
+                          'border-blue-400/50 bg-blue-500/20 text-blue-400'}`} // Blue for Super Like now
+                     >
+                        {feedback.type === 'pass' ? 'NOPE' : feedback.type === 'like' ? 'LIKE' : 'SUPER'}
+                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Bottom Action Buttons */}
-            <div className="mt-6 flex justify-center gap-3">
+            {/* Minimal Action Buttons */}
+            <div className="mt-8 flex items-center gap-6">
               <ActionButton
                 icon={Undo2}
                 onClick={handleUndo}
                 disabled={swipeHistory.length === 0}
+                variant="secondary"
                 size="small"
-                gradient="linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)"
-                shadowColor="rgba(255,255,255,0.1)"
               />
               <ActionButton
                 icon={X}
                 onClick={() => handleSwipeAction('left')}
+                variant="danger"
                 size="large"
-                gradient={theme.gradients.danger}
-                shadowColor="#EF444440"
               />
               <ActionButton
                 icon={Star}
                 onClick={() => handleSwipeAction('up')}
                 disabled={superLikesRemaining === 0}
+                variant="super"
                 size="medium"
-                gradient={`linear-gradient(135deg, ${theme.colors.primary.yellow} 0%, #FFD700 100%)`}
-                shadowColor={theme.colors.primary.yellow + '40'}
-                textColor="#000"
               />
               <ActionButton
                 icon={Heart}
                 onClick={() => handleSwipeAction('right')}
+                variant="primary"
                 size="large"
-                gradient={theme.gradients.button}
-                shadowColor={theme.colors.primary.purple + '40'}
               />
-              <ActionButton
+               <ActionButton
                 icon={MessageCircle}
                 onClick={() => navigate('/chat')}
+                variant="secondary"
                 size="small"
-                gradient="linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)"
-                shadowColor="rgba(255,255,255,0.1)"
               />
-            </div>
-
-            {/* Stats Bar */}
-            <div className="mt-6 flex justify-center gap-4">
-              <div className="flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 backdrop-blur-xl border border-white/10">
-                <Heart size={14} className="text-white/60" />
-                <span className="text-xs text-white/80 font-medium">{swipesRemaining} left</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 backdrop-blur-xl border border-white/10">
-                <Star size={14} style={{ color: theme.colors.primary.yellow }} />
-                <span className="text-xs text-white/80 font-medium">{superLikesRemaining} super</span>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => handleSwipeAction('right')}
-                className="btn-primary px-8 py-3 rounded-full"
-              >
-                Send a quick hello
-              </motion.button>
             </div>
           </div>
         )}
@@ -296,9 +267,7 @@ interface ActionButtonProps {
   onClick: () => void;
   disabled?: boolean;
   size?: 'small' | 'medium' | 'large';
-  gradient: string;
-  shadowColor: string;
-  textColor?: string;
+  variant: 'primary' | 'secondary' | 'danger' | 'super';
 }
 
 const ActionButton = ({
@@ -306,20 +275,25 @@ const ActionButton = ({
   onClick,
   disabled = false,
   size = 'medium',
-  gradient,
-  shadowColor,
-  textColor = '#fff'
+  variant
 }: ActionButtonProps) => {
   const sizeClasses = {
-    small: 'h-12 w-12',
-    medium: 'h-14 w-14',
-    large: 'h-16 w-16',
+    small: 'w-10 h-10',
+    medium: 'w-12 h-12',
+    large: 'w-14 h-14',
   };
 
   const iconSizes = {
-    small: 16,
+    small: 18,
     medium: 20,
-    large: 22,
+    large: 24,
+  };
+  
+  const variants = {
+      primary: "bg-white/10 hover:bg-green-500/20 text-white hover:text-green-400 border-white/10 hover:border-green-500/30", // Like
+      danger: "bg-white/10 hover:bg-red-500/20 text-white hover:text-red-400 border-white/10 hover:border-red-500/30", // Nope
+      super: "bg-white/10 hover:bg-blue-500/20 text-white hover:text-blue-400 border-white/10 hover:border-blue-500/30", // Super (Blue)
+      secondary: "bg-transparent hover:bg-white/5 text-white/40 hover:text-white border-transparent hover:border-white/10", // Undo/Chat
   };
 
   return (
@@ -328,14 +302,9 @@ const ActionButton = ({
       whileTap={{ scale: disabled ? 1 : 0.9 }}
       onClick={onClick}
       disabled={disabled}
-      className={`${sizeClasses[size]} flex items-center justify-center rounded-full backdrop-blur-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-white/10`}
-      style={{
-        background: gradient,
-        boxShadow: `0 15px 35px ${shadowColor}`,
-        color: textColor
-      }}
+      className={`${sizeClasses[size]} ${variants[variant]} flex items-center justify-center rounded-full border backdrop-blur-sm transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed`}
     >
-      <Icon size={iconSizes[size]} />
+      <Icon size={iconSizes[size]} strokeWidth={2.5} />
     </motion.button>
   );
 };

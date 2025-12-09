@@ -190,9 +190,9 @@ async def register_options(request: Request):
     logger.info(f"OPTIONS /auth/register - CORS preflight - Origin: {origin} - Allowed: {response.headers.get('Access-Control-Allow-Origin')}")
     return response
 
-@router.post("/register", response_model=dict)
+@router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/15minutes")  # Stricter: 3 attempts per 15 minutes
-async def register(request: Request, data: RegisterRequest):
+async def register(request: Request, data: RegisterRequest, response: Response):
     """
     Register new user with enhanced validation
     """
@@ -274,7 +274,57 @@ async def register(request: Request, data: RegisterRequest):
         if not email_sent:
             logger.warning(f"Failed to send verification email to {email[:3]}***@{email.split('@')[1]}")
         
-        # Return verification instructions
+        # Issue tokens so new users can start immediately (tests expect this)
+        access_token = create_access_token({
+            "sub": user_id,
+            "email": email,
+            "verified": user_doc.get("emailVerified", False)
+        })
+        refresh_token = create_refresh_token({"sub": user_id})
+        refresh_token_hash = hash_refresh_token(refresh_token)
+
+        await get_db().users.update_one(
+            {"_id": result.inserted_id},
+            {
+                "$push": {
+                    "refreshTokens": {
+                        "token": refresh_token_hash,
+                        "createdAt": datetime.utcnow()
+                    }
+                },
+                "$set": {"lastLogin": datetime.utcnow()}
+            }
+        )
+
+        # Set session cookies (harmless in tests, required for browser flows)
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=settings.JWT_ACCESS_TTL,
+            path="/"
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=settings.NODE_ENV == "production",
+            samesite="lax",
+            max_age=14 * 24 * 60 * 60,
+            path="/auth"
+        )
+
+        user_payload = {
+            "id": user_id,
+            "email": email,
+            "name": data.name.strip(),
+            "emailVerified": user_doc.get("emailVerified", False),
+            "profileComplete": False
+        }
+
+        # Return verification instructions + tokens
         return {
             "message": "Registration successful! Please check your email to verify your account.",
             "emailSent": email_sent,
@@ -282,7 +332,11 @@ async def register(request: Request, data: RegisterRequest):
             # Development only - helps with testing
             "verificationToken": verification_token if settings.DEBUG else None,
             "verificationLink": verification_link if settings.DEBUG else None,
-            "requiresEmailVerification": True
+            "requiresEmailVerification": True,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": user_payload
         }
         
     except HTTPException:

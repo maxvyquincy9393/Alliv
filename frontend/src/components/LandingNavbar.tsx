@@ -29,7 +29,7 @@ export const LandingNavbar = () => {
       <div className="max-w-[1400px] mx-auto px-6 md:px-12 flex items-center justify-between">
         {/* Logo - Larger and to the side */}
         <Link to="/" className="flex items-center gap-3 group">
-          <Logo size="xl" />
+          <Logo size="large" />
           <span className="text-xl font-display font-bold tracking-tight text-white">ALLIV</span>
         </Link>
 
@@ -37,16 +37,22 @@ export const LandingNavbar = () => {
         <div className="flex items-center gap-8">
           {/* Links */}
           <div className="hidden md:flex items-center gap-8">
-            {['Product', 'Features', 'Community'].map((item) => (
-              <Magnetic key={item} strength={20}>
-                <a
-                  href={`#${item.toLowerCase()}`}
+             <Magnetic strength={20}>
+                <Link
+                  to="/features"
                   className="text-sm font-medium text-white/60 hover:text-white transition-colors"
                 >
-                  {item}
-                </a>
+                  Features
+                </Link>
               </Magnetic>
-            ))}
+             <Magnetic strength={20}>
+                <Link
+                  to="/about"
+                  className="text-sm font-medium text-white/60 hover:text-white transition-colors"
+                >
+                  About
+                </Link>
+              </Magnetic>
           </div>
 
           {/* Actions */}
@@ -65,7 +71,7 @@ export const LandingNavbar = () => {
                 className="group relative px-6 py-2.5 rounded-full bg-white text-black text-sm font-bold tracking-wide overflow-hidden transition-transform hover:scale-105 flex items-center justify-center"
               >
                 <span className="relative z-10">Join Network</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-purple-100 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-cyan-100 opacity-0 group-hover:opacity-100 transition-opacity" />
               </Link>
             </Magnetic>
           </div>

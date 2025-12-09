@@ -12,6 +12,7 @@ const ForgotPassword = lazy(() => import('./routes/ForgotPassword').then((module
 const VerifyResetOTP = lazy(() => import('./routes/VerifyResetOTP').then((module) => ({ default: module.VerifyResetOTP })));
 const ResetPassword = lazy(() => import('./routes/ResetPassword').then((module) => ({ default: module.ResetPassword })));
 const SetupProfile = lazy(() => import('./routes/SetupProfile').then((module) => ({ default: module.SetupProfile })));
+const Features = lazy(() => import('./routes/Features').then((module) => ({ default: module.Features })));
 const Home = lazy(() => import('./routes/Home').then((module) => ({ default: module.Home })));
 const Discover = lazy(() => import('./routes/Discover').then((module) => ({ default: module.Discover })));
 const Chat = lazy(() => import('./routes/Chat').then((module) => ({ default: module.Chat })));
@@ -43,6 +44,7 @@ function App() {
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Landing />} />
+              <Route path="/features" element={<Features />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register/*" element={<Register />} />
               <Route path="/verify-email" element={<VerifyEmail />} />

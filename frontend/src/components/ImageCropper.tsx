@@ -1,16 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import {
-    Crop,
-    RotateCw,
-    FlipHorizontal,
-    FlipVertical,
-    ZoomIn,
-    ZoomOut,
-    Maximize2,
-    Check,
-    X
-} from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCw, Check, FlipHorizontal, FlipVertical, Maximize2 } from 'lucide-react';
 
 type AspectRatio = '1:1' | '4:5' | '16:9' | '9:16' | 'free';
 
@@ -82,7 +71,7 @@ export const ImageCropper = ({
         setAspectRatio(newRatio);
 
         if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingRect();
+        const rect = containerRef.current.getBoundingClientRect();
 
         const ratio = ASPECT_RATIOS.find(r => r.value === newRatio)?.ratio;
 

@@ -7,17 +7,17 @@ from datetime import datetime, timedelta
 from app.services.token_blacklist import TokenBlacklist
 
 
+@pytest.fixture
+def blacklist():
+    """Create a fresh blacklist instance for each test"""
+    bl = TokenBlacklist()
+    bl._memory_blacklist.clear()
+    bl._memory_expiry.clear()
+    return bl
+
+
 class TestTokenBlacklist:
     """Test token blacklist functionality"""
-    
-    @pytest.fixture
-    def blacklist(self):
-        """Create a fresh blacklist instance for each test"""
-        bl = TokenBlacklist()
-        # Clear any existing data
-        bl._memory_blacklist.clear()
-        bl._memory_expiry.clear()
-        return bl
     
     @pytest.mark.asyncio
     async def test_revoke_token(self, blacklist):

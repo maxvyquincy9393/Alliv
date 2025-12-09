@@ -8,7 +8,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useSocket, SocketMessage } from '../hooks/useSocket';
 import { sanitizeText } from '../lib/sanitize';
 import { motion } from 'framer-motion';
-import { theme } from '../styles/theme';
 import type { Message } from '../types/message';
 
 const mapSocketMessage = (message: SocketMessage): Message => ({

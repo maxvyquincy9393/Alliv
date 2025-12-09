@@ -1,216 +1,228 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { LandingNavbar } from '../components/LandingNavbar';
-import { Zap, Shield, Cpu, ChevronRight } from 'lucide-react';
-import { useRef } from 'react';
-import { Magnetic } from '../components/Magnetic';
-import { TiltCard } from '../components/TiltCard';
-import { NetworkGlobe } from '../components/NetworkGlobe';
+import { ArrowRight, CheckCircle2, Users, Zap, Shield } from 'lucide-react';
 
 export const Landing = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const fadeInUp = {
+    initial: { opacity: 0, y: 20 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true },
+    transition: { duration: 0.6 }
+  };
 
   return (
-    <div ref={containerRef} className="relative min-h-screen bg-[#000000] text-white overflow-hidden selection:bg-blue-500/30 font-sans">
+    <div className="relative min-h-screen bg-[#020204] text-white font-sans overflow-x-hidden selection:bg-blue-500/20">
       <LandingNavbar />
 
-      {/* Cinematic Background - Cleaner, less noise */}
+      {/* --- Background FX --- */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#1a1a2e,transparent_50%)] opacity-40"></div>
-        <div className="absolute top-[-20%] left-[-10%] w-[120%] h-[120%] bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.03),transparent_40%)] blur-[120px]" />
+        {/* Subtle top gradient */}
+        <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-b from-blue-900/10 to-transparent opacity-40" />
+        {/* Very subtle ambient glow in center */}
+        <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-blue-600/5 rounded-full blur-[120px]" />
       </div>
 
-      {/* Hero Section */}
-      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 pt-32 pb-20">
-        <motion.div
+      {/* --- Hero Section --- */}
+      <section className="relative z-10 pt-40 pb-20 px-6 md:px-12 max-w-7xl mx-auto flex flex-col items-center text-center">
+        <motion.div 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center max-w-5xl mx-auto flex flex-col items-center"
+          transition={{ duration: 0.8 }}
+          className="max-w-4xl"
         >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1.2, ease: "easeOut" }}
-            className="mb-10 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-xl hover:bg-white/[0.08] transition-colors cursor-default"
-          >
-            <span className="text-[13px] font-medium text-white/80">Introducing ColabMatch 2.0</span>
-            <ChevronRight className="w-3 h-3 text-white/50" />
-          </motion.div>
-
-          <h1 className="text-6xl md:text-8xl lg:text-[7rem] font-display font-semibold tracking-tighter leading-[0.95] mb-8 text-center">
-            <span className="block bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 pb-2">
-              Collaboration.
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm mb-8">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
             </span>
-            <span className="block bg-clip-text text-transparent bg-gradient-to-b from-white/90 to-white/40 pb-4">
-              Reimagined.
+            <span className="text-sm font-medium text-white/80 tracking-wide">The #1 Platform for Tech Co-Founders</span>
+          </div>
+
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.1] mb-8 text-white">
+            Build your dream team <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
+              in record time.
             </span>
           </h1>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.4 }}
-            className="text-xl md:text-2xl text-white/60 max-w-2xl mx-auto mb-12 leading-relaxed font-normal tracking-tight"
-          >
-            The premium network for elite developers and visionaries.
-            <br className="hidden md:block" />
-            Build the impossible, together.
-          </motion.p>
+          <p className="text-xl text-white/50 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Connect with verified developers, designers, and product managers. 
+            AI-driven matching to find the perfect fit for your next startup.
+          </p>
 
-          <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-            <Magnetic strength={30}>
-              <Link
-                to="/register"
-                className="group relative px-8 py-4 rounded-full bg-white text-black font-medium text-lg tracking-tight overflow-hidden transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
-              >
-                <span className="relative z-10">Start Building</span>
-              </Link>
-            </Magnetic>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              to="/register"
+              className="h-14 px-8 rounded-full bg-white text-black font-semibold text-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
+            >
+              Start Matching Free <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/features"
+              className="h-14 px-8 rounded-full bg-white/5 border border-white/10 text-white font-medium text-lg hover:bg-white/10 transition-colors flex items-center"
+            >
+              View Features
+            </Link>
+          </div>
 
-            <Magnetic strength={30}>
-              <Link
-                to="/login"
-                className="group px-8 py-4 rounded-full text-white font-medium text-lg tracking-tight transition-colors flex items-center gap-2 backdrop-blur-sm bg-white/[0.05] border border-white/10 hover:bg-white/[0.1]"
-              >
-                Learn more <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
-            </Magnetic>
+          <div className="mt-12 flex items-center justify-center gap-8 text-sm text-white/40">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+              <span>Verified Profiles</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+              <span>Free to Join</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+              <span>Global Network</span>
+            </div>
           </div>
         </motion.div>
       </section>
 
-      {/* Bento Grid Features */}
-      <section id="features" className="relative z-10 py-32 px-6 md:px-12 lg:px-20 max-w-[1400px] mx-auto">
-        <div className="mb-24 text-center">
-          <h2 className="text-4xl md:text-6xl font-display font-semibold tracking-tighter mb-6">
-            Designed for <span className="text-blue-500">Velocity</span>.
-          </h2>
-          <p className="text-xl text-white/50 max-w-2xl mx-auto">
-            Every interaction is crafted to be fluid, intuitive, and powerful.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[450px]">
-          {/* Large Card - Global Network */}
-          <div className="md:col-span-2 h-full">
-            <TiltCard className="h-full">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="relative h-full group overflow-hidden rounded-[40px] bg-[#0A0A0A] border border-white/[0.08] p-10 hover:border-white/[0.15] transition-colors"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-100" />
-                <div className="relative z-10 h-full flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-3xl font-display font-medium mb-3 tracking-tight">Global Talent Network</h3>
-                    <p className="text-white/50 text-lg max-w-md leading-relaxed">Access a curated pool of world-class creators. Connect instantly with the best minds across the globe.</p>
-                  </div>
-                  <div className="relative h-56 w-full mt-8 rounded-3xl border border-white/5 bg-black/20 overflow-hidden">
-                    <NetworkGlobe />
-                  </div>
-                </div>
-              </motion.div>
-            </TiltCard>
-          </div>
-
-          {/* Tall Card - Instant Velocity */}
-          <div className="md:row-span-2 h-full">
-            <TiltCard className="h-full">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.1 }}
-                className="relative h-full group overflow-hidden rounded-[40px] bg-[#0A0A0A] border border-white/[0.08] p-10 hover:border-white/[0.15] transition-colors"
-              >
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-blue-500/5" />
-                <div className="relative z-10 h-full flex flex-col">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-8 border border-white/5">
-                    <Zap className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="text-3xl font-display font-medium mb-4 tracking-tight">Instant<br />Velocity</h3>
-                  <p className="text-white/50 text-lg mb-12 leading-relaxed">Accelerate your workflow with AI-driven matching and seamless collaboration tools.</p>
-
-                  <div className="mt-auto space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        </div>
-                        <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            whileInView={{ width: "100%" }}
-                            transition={{ duration: 1, delay: 0.5 + (i * 0.2) }}
-                            className="h-full bg-blue-500/50"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            </TiltCard>
-          </div>
-
-          {/* Small Card 1 - Verified */}
-          <div className="h-full">
-            <TiltCard className="h-full">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2 }}
-                className="relative h-full group overflow-hidden rounded-[40px] bg-[#0A0A0A] border border-white/[0.08] p-10 hover:border-white/[0.15] transition-colors"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-6 border border-white/5">
-                  <Shield className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-2xl font-display font-medium mb-3 tracking-tight">Verified Elite</h3>
-                <p className="text-white/50 leading-relaxed">Every member is vetted for excellence and reliability.</p>
-              </motion.div>
-            </TiltCard>
-          </div>
-
-          {/* Small Card 2 - Smart Match */}
-          <div className="h-full">
-            <TiltCard className="h-full">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.3 }}
-                className="relative h-full group overflow-hidden rounded-[40px] bg-[#0A0A0A] border border-white/[0.08] p-10 hover:border-white/[0.15] transition-colors"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-6 border border-white/5">
-                  <Cpu className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-2xl font-display font-medium mb-3 tracking-tight">Smart Match</h3>
-                <p className="text-white/50 leading-relaxed">AI algorithms that understand your tech stack and culture.</p>
-              </motion.div>
-            </TiltCard>
+      {/* --- Trusted By (Clean) --- */}
+      <section className="py-12 border-y border-white/5 bg-white/[0.02]">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <p className="text-sm font-medium text-white/30 uppercase tracking-widest mb-8">Trusted by builders from</p>
+          <div className="flex flex-wrap justify-center gap-12 md:gap-20 opacity-40 grayscale">
+             {['Y Combinator', 'Techstars', 'Antler', 'Sequoia', 'a16z'].map(name => (
+               <span key={name} className="text-xl font-bold font-display">{name}</span>
+             ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 py-20 border-t border-white/5 bg-[#000000]">
-        <div className="max-w-[1400px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="text-center md:text-left">
-            <h2 className="text-xl font-display font-bold mb-2 tracking-tight">ALLIV</h2>
-            <p className="text-white/40 text-sm">© 2024 Alliv Inc.</p>
+      {/* --- Value Proposition (Grid) --- */}
+      <section className="py-32 px-6 max-w-7xl mx-auto">
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <motion.div {...fadeInUp} className="space-y-4">
+               <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                  <Users className="w-6 h-6 text-blue-400" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Intelligent Matching</h3>
+               <p className="text-white/50 leading-relaxed">
+                 Our algorithm analyzes 50+ data points including tech stack, working style, and availability to find your ideal partner, not just a resume.
+               </p>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.2 }} className="space-y-4">
+               <div className="w-12 h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+                  <Shield className="w-6 h-6 text-cyan-400" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Verified Identity</h3>
+               <p className="text-white/50 leading-relaxed">
+                 Eliminate spam and bots. Every user undergoes GitHub verification and optional ID checks to ensure high-intent collaboration.
+               </p>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.4 }} className="space-y-4">
+               <div className="w-12 h-12 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                  <Zap className="w-6 h-6 text-indigo-400" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Built for Speed</h3>
+               <p className="text-white/50 leading-relaxed">
+                 From chat to kanban boards, our platform provides the essential tools you need to go from idea to MVP in record time.
+               </p>
+            </motion.div>
+         </div>
+      </section>
+
+      {/* --- Simple Stats / Social Proof --- */}
+      <section className="py-20 bg-gradient-to-b from-white/5 to-transparent">
+         <div className="max-w-7xl mx-auto px-6">
+           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center divide-x divide-white/5">
+              {[
+                { label: "Matches Created", value: "10,000+" },
+                { label: "Countries", value: "150+" },
+                { label: "Active Projects", value: "2,500+" },
+                { label: "User Rating", value: "4.9/5" },
+              ].map((stat) => (
+                <div key={stat.label} className="px-4">
+                  <div className="text-3xl md:text-4xl font-bold text-white mb-2">{stat.value}</div>
+                  <div className="text-sm text-white/40 font-medium uppercase tracking-wide">{stat.label}</div>
+                </div>
+              ))}
+           </div>
+         </div>
+      </section>
+
+      {/* --- CTA Section --- */}
+      <section className="py-32 px-6 text-center">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          className="max-w-3xl mx-auto bg-[#0A0A0C] border border-white/10 rounded-3xl p-12 md:p-20 relative overflow-hidden"
+        >
+           {/* Glow FX */}
+           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+           <div className="relative z-10">
+             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+               Ready to ship your next big thing?
+             </h2>
+             <p className="text-xl text-white/50 mb-10 max-w-lg mx-auto">
+               Join thousands of founders and developers building the future.
+             </p>
+             <Link
+                to="/register"
+                className="inline-flex h-14 px-8 items-center justify-center rounded-full bg-white text-black font-bold text-lg hover:scale-105 transition-transform"
+              >
+                Join for Free
+              </Link>
+           </div>
+        </motion.div>
+      </section>
+
+      {/* --- Footer --- */}
+      <footer className="border-t border-white/5 bg-[#020204] pt-16 pb-8 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start gap-12 mb-16">
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <img src="/logo_alivv.png" alt="ALLIV" className="w-8 h-8 object-contain" />
+                <span className="text-xl font-bold text-white">ALLIV</span>
+              </div>
+              <p className="text-white/40 text-sm max-w-xs">
+                Connecting the world's best builders to create products that matter.
+              </p>
+            </div>
+            
+            <div className="flex gap-16">
+              <div>
+                <h4 className="text-white font-bold mb-4">Product</h4>
+                <ul className="space-y-3 text-sm text-white/60">
+                  <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
+                  <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
+                  <li><Link to="/login" className="hover:text-white transition-colors">Login</Link></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-white font-bold mb-4">Legal</h4>
+                <ul className="space-y-3 text-sm text-white/60">
+                  <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link></li>
+                  <li><Link to="/terms" className="hover:text-white transition-colors">Terms</Link></li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-8 text-sm font-medium text-white/60">
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
-            <a href="#" className="hover:text-white transition-colors">Twitter</a>
-            <a href="#" className="hover:text-white transition-colors">GitHub</a>
+          
+          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-white/30">
+            <p>© 2024 Alliv Inc. All rights reserved.</p>
+            <div className="flex gap-6">
+              <a href="#" className="hover:text-white">Twitter</a>
+              <a href="#" className="hover:text-white">LinkedIn</a>
+              <a href="#" className="hover:text-white">GitHub</a>
+            </div>
           </div>
         </div>
       </footer>
     </div>
   );
 };
+
 export default Landing;

@@ -11,7 +11,7 @@ import logging
 
 from ..auth import get_current_user, oauth2_scheme
 from .. import db
-from ..services import get_matching_service
+from ..services import get_matching_service, MatchResult
 from ..config import settings
 
 router = APIRouter(prefix="/discover", tags=["Discovery"])
@@ -92,9 +92,58 @@ async def _get_current_user_dependency(
         )
 
 
+def calculate_compatibility(
+    current_user: dict,
+    target_user: dict
+) -> int:
+    """
+    Calculate a simple compatibility score between two users.
+
+    Scoring breakdown:
+    - Common skills: 40% (max 40 points)
+    - Common interests: 40% (max 40 points)
+    - Field match: 20% (max 20 points)
+    """
+    try:
+        score = 0
+
+        current_skills = set(current_user.get('skills', []))
+        target_skills = set(target_user.get('skills', []))
+        current_interests = set(current_user.get('interests', []))
+        target_interests = set(target_user.get('interests', []))
+        current_field = current_user.get('field', '').lower().strip()
+        target_field = target_user.get('field', '').lower().strip()
+
+        # 1. Skills match (40%)
+        if current_skills and target_skills:
+            common_skills = current_skills.intersection(target_skills)
+            total_skills = current_skills.union(target_skills)
+            skills_ratio = len(common_skills) / len(total_skills)
+            score += int(skills_ratio * 40)
+
+        # 2. Interests match (40%)
+        if current_interests and target_interests:
+            common_interests = current_interests.intersection(target_interests)
+            total_interests = current_interests.union(target_interests)
+            interests_ratio = len(common_interests) / len(total_interests)
+            score += int(interests_ratio * 40)
+
+        # 3. Field match (20%)
+        if current_field and target_field:
+            if current_field == target_field:
+                score += 20
+            elif current_field in target_field or target_field in current_field:
+                score += 10
+
+        return max(0, min(100, score))
+    except Exception as exc:
+        logger.error(f"[ERROR] Compatibility calculation error: {exc}")
+        return 0
+
+
 def format_user_response(
-    user: dict, 
-    match_result: Any,  # MatchResult from matching_service
+    user: dict,
+    compatibility_or_match: Any,  # MatchResult or int compatibility
     include_details: bool = False
 ) -> OnlineUserResponse:
     """
@@ -102,12 +151,29 @@ def format_user_response(
     
     Args:
         user: MongoDB user document
-        match_result: MatchResult from matching service
+        compatibility_or_match: MatchResult from matching service or numeric score
         include_details: Whether to include breakdown and conversation starters
         
     Returns:
         OnlineUserResponse: Formatted user with AI compatibility
     """
+    # Normalize compatibility input
+    if isinstance(compatibility_or_match, MatchResult):
+        compatibility = compatibility_or_match.score
+        breakdown = compatibility_or_match.breakdown if include_details else None
+        reasons = compatibility_or_match.reasons if include_details else None
+        starters = (
+            compatibility_or_match.conversation_starters
+            if include_details else None
+        )
+    else:
+        compatibility = int(compatibility_or_match or 0)
+        breakdown = None
+        reasons = None
+        starters = None
+
+    compatibility = max(0, min(100, compatibility))
+
     response = OnlineUserResponse(
         id=str(user['_id']),
         name=user.get('name', ''),
@@ -120,15 +186,17 @@ def format_user_response(
         location=user.get('location', {}),
         isOnline=user.get('isOnline', False),
         lastSeen=user.get('lastSeen', datetime.utcnow()),
-        compatibility=match_result.score,
-        match_reasons=match_result.reasons if include_details else None
+        compatibility=compatibility,
+        match_reasons=reasons if include_details else None,
+        match_breakdown=None,
+        conversation_starters=None
     )
-    
+
     # Only include detailed breakdown for high matches
-    if include_details and match_result.score >= 60:
-        response.match_breakdown = match_result.breakdown
-        response.conversation_starters = match_result.conversation_starters
-    
+    if include_details and compatibility >= 60:
+        response.match_breakdown = breakdown
+        response.conversation_starters = starters
+
     return response
 
 
